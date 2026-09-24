@@ -27,7 +27,7 @@ In your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  cli_router: ^0.0.2
+  cli_router: ^0.1.1
 ```
 
 Or, if you prefer the command line, you can use:
@@ -104,6 +104,14 @@ final dry = req.flagBool('dry-run');
 final threads = req.flagInt('threads') ?? 1;
 final id = req.param('orderId');
 ```
+
+### Which tokens count as options?
+
+An option starts with `-` or `--` immediately followed by an ASCII letter (`A-Z` or `a-z`), and its name (the part before `=`) contains no whitespace. The value after `=` may contain anything. Examples include `-v`, `-abc`, `--name=value`, `--title=two words`, and `--no-color`. Only the first character after the dashes must be a letter.
+
+Negative numbers (`-3`, `-2.5`, `-.5`, `-1e3`), bare `-`, and tokens containing whitespace (such as the single quoted argument `'-1 2 +'`) are not options. They can be route arguments or positionals. A value-taking option can consume them as its next value: `--offset -3` sets `offset` to `-3`, and `-o '-1 2 +'` sets `o` to `-1 2 +`. Values containing whitespace work either way: `--name 'Jane Doe'` or `--name='Jane Doe'`.
+
+The exact token `--` remains special: it ends option parsing and is never consumed as an option value. Every following token is positional, even if it looks like an option.
 
 ---
 

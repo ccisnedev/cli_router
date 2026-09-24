@@ -138,7 +138,7 @@ class CliRouter {
       final match = _matchRoute(candidate);
       if (match != null) {
         // Everything between the matched route and the first flag is a
-        // positional — including when the invocation carries no flags at all.
+        // positional, including when the invocation carries no flags at all.
         final immediatePositionals = args.sublist(
           j,
           flagStart < 0 ? args.length : flagStart,
@@ -214,9 +214,7 @@ class CliRouter {
   static int _indexOfFirstFlag(List<String> args) {
     if (args.isEmpty) return -1;
     for (int i = 0; i < args.length; i++) {
-      final a = args[i];
-      if (a == '--') return i; // end of options
-      if (a.startsWith('-')) return i;
+      if (_isOptionToken(args[i])) return i;
     }
     return -1;
   }

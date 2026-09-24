@@ -1,5 +1,14 @@
 part of 'cli_router.dart';
 
+// An option is `-` or `--` followed by a letter, with no whitespace in its
+// name (the part before `=`). The value after `=` may contain anything, so
+// `--title=two words` stays an option while `-1 2 +` is a positional.
+// Includes the end-of-options marker so lookahead never consumes it as a value.
+final _optionPattern = RegExp(r'^--?[A-Za-z][^=\s]*(=[\s\S]*)?$');
+
+bool _isOptionToken(String token) =>
+    token == '--' || _optionPattern.hasMatch(token);
+
 class _FlagsParseResult {
   _FlagsParseResult(this.flags, this.trailingPositionals);
   final Map<String, String?> flags;
@@ -12,7 +21,7 @@ _FlagsParseResult _parseFlags(List<String> args) {
   bool parsing = true;
 
   String? takeNext(int i) =>
-      (i + 1 < args.length && !args[i + 1].startsWith('-'))
+      (i + 1 < args.length && !_isOptionToken(args[i + 1]))
       ? args[i + 1]
       : null;
 
@@ -23,6 +32,10 @@ _FlagsParseResult _parseFlags(List<String> args) {
       continue;
     }
     if (!parsing) {
+      trailing.add(a);
+      continue;
+    }
+    if (!_isOptionToken(a)) {
       trailing.add(a);
       continue;
     }

@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/)
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.1] - 2026-09-23
+
+### Fixed
+
+- Use one option-token predicate for route matching, flag parsing, and option value lookahead. An option starts with one or two dashes followed by an ASCII letter, and its name (the part before `=`) contains no whitespace; the value after `=` may contain anything, so `--title=two words` is still an option. Negative numbers, bare `-`, quoted expressions, and other non-option tokens remain available as positionals or option values, so `--offset -3` now assigns `-3` to `offset`. The `--` marker still ends options.
+
 ## [0.1.0] - 2026-07-13
 ### Added
 - `CliRouter({CliNotFoundHandler? onNotFound})`: an application can now decide how an unmatched invocation is reported and with which exit code. The hook receives a `CliNotFound` (original args + sinks) and is inherited by every mounted subrouter. Presentation belongs to the application; the router only knows *what* failed to match.
