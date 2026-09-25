@@ -30,9 +30,9 @@ Future<void> main(List<String> args) async {
   root.use(loggingMiddleware);
 
   // ---- Modules (each contributes its own subrouter) ----
-  root.mount('user', buildUsersModule());
-  root.mount('order', buildOrdersModule());
-  root.mount('system', buildSystemModule());
+  root.mount('user', buildUsersModule(globalOptions: [helpOption]));
+  root.mount('order', buildOrdersModule(globalOptions: [helpOption]));
+  root.mount('system', buildSystemModule(globalOptions: [helpOption]));
 
   // Root help command (distinct from the global --help flag).
   root.cmd(

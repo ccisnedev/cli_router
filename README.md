@@ -26,11 +26,16 @@ upgrading from 0.1.x.
   word, flattening transitively. The mounted router's own middleware (from
   its own `use()`) is preserved and runs inside the mounting router's,
   however many levels of mounting deep; a word it reserves without a route
-  of its own (e.g. through one of its own empty mounts) stays reserved.
+  of its own (e.g. through one of its own empty mounts) stays reserved. One
+  program, one set of globals: the mounted router's `globalOptions` must
+  equal the mounting router's, by shape, as a set, or `mount()` throws an
+  `ArgumentError`. Build every subrouter with the same `globalOptions` list
+  (or an equal one) that the root router uses.
 - Route patterns: literal words, required `<name>` parameters, a single
   trailing optional `[<name>]` parameter, or a single trailing `*` wildcard.
 - POSIX option ordering: **route, then options, then operands**. `--` ends
-  option parsing.
+  option parsing, but only before the first operand; `--` after an operand
+  has already started is `misplacedOption`, not silently dropped.
 - A declarative option schema: `OptionSpec.flag` and `OptionSpec.value`,
   with `abbr`, `required` and `repeatable` all explicit.
 - Lossless option parsing: every occurrence of every option is kept, in
@@ -68,9 +73,13 @@ dart pub add cli_router
 import 'dart:io';
 import 'package:cli_router/cli_router.dart';
 
-final dryRunOption = OptionSpec.flag('dry-run', repeatable: false);
-final threadsOption =
-    OptionSpec.value('threads', required: false, repeatable: false);
+final dryRunOption = OptionSpec.flag('dry-run', abbr: null, repeatable: false);
+final threadsOption = OptionSpec.value(
+  'threads',
+  abbr: null,
+  required: false,
+  repeatable: false,
+);
 
 Future<void> main(List<String> args) async {
   final cli = CliRouter(globalOptions: const []);
@@ -148,12 +157,17 @@ final fileOption = OptionSpec.value(
 );
 ```
 
-- `OptionSpec.flag(name, {abbr, required repeatable})`: present or absent,
-  never takes a value. A flag is never `required` — either it was read or it
-  was not, there is no missing value to report.
-- `OptionSpec.value(name, {abbr, required required, required repeatable})`:
-  takes a value, via `--name value`, `--name=value`, or `-n value` (never
-  `-n=value`, which is not a valid short form).
+- `OptionSpec.flag(name, {required abbr, required repeatable})`: present or
+  absent, never takes a value. A flag is never `required` — either it was
+  read or it was not, there is no missing value to report.
+- `OptionSpec.value(name, {required abbr, required required, required
+  repeatable})`: takes a value, via `--name value`, `--name=value`, or
+  `-n value` (never `-n=value`, which is not a valid short form).
+
+`abbr` is a required named parameter on both (its type stays `String?`):
+pass `abbr: 'j'` for a short form, or `abbr: null` for an option with none.
+This is deliberate: a caller who forgets whether an option has a short
+form is forced to say so explicitly, rather than getting a silent `null`.
 
 `globalOptions` is required on `CliRouter` (pass `const []` when the router
 has none): every behavior-changing detail is declared, nothing defaults
@@ -219,8 +233,16 @@ cli eval rpn --json '1 2 +'   # valid: option before the operand
 cli eval rpn '1 2 +' --json   # misplacedOption: option after the operand
 ```
 
-`--` ends option parsing; every token after it is an operand, even if it
-looks like an option.
+`--` ends option parsing, but only before the first operand starts; every
+token after it is then an operand, even if it looks like an option. `--`
+itself, once an operand has already started, is `misplacedOption`
+("'--' goes before the program"), not silently absorbed and not folded
+into the operands that follow it:
+
+```bash
+cli eval rpn -- --json '1 2 +'   # valid: '--' before the operand
+cli eval rpn '1 2 +' --          # misplacedOption: '--' after the operand
+```
 
 **The resolver is committed once the first operand starts.** The first
 token read as a required parameter, the optional parameter, or a wildcard
@@ -300,8 +322,8 @@ final code = await router.run(
 | `unknownCommand` | The first token matches no route at all. |
 | `extraArgument` | A resolved route was reached, but a leftover token fits nowhere in it. |
 | `incomplete` | The invocation ends, or a token fits nothing, at a node that is not itself a route and has no pending required parameter. |
-| `missingArgument` | The invocation ends at a node still waiting on a required parameter. |
-| `unknownOption` | The token is option shaped but declared nowhere reachable, or it is declared somewhere reachable while still resolving (a global, or a sibling route's option) but is not accepted by the specific route the invocation resolves to (`route` names that route). |
+| `missingArgument` | The invocation ends at a node still waiting on a required parameter, and, when exactly one route is still reachable from there, every option already read is one that route actually accepts. |
+| `unknownOption` | The token is option shaped but declared nowhere reachable, or it is declared somewhere reachable while still resolving (a global, or a sibling route's option) but is not accepted by the specific route the invocation resolves to (`route` names that route). This also preempts `missingArgument`: when exactly one route is still reachable and an option already read is one it does not accept, that mismatch is reported instead of the still-missing parameter. |
 | `misplacedOption` | Declared, but not readable here: written too early or too late for the route it belongs to. |
 | `missingValue` | A value option is the last token, or the next token is option shaped. |
 | `unexpectedValue` | A flag was given a value (`--flag=x`); flags never take one. |

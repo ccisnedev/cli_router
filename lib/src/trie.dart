@@ -332,6 +332,22 @@ void _validateOptionScope(
   }
 }
 
+/// Whether [a] and [b] declare exactly the same options, by shape, as a
+/// set (order does not matter). Used by [CliRouter.mount] to enforce "one
+/// program, one set of globals": a mounted router's own `globalOptions`
+/// must equal the parent's exactly, since `mount()` never carries a
+/// subrouter's `globalOptions` along, only each route's own `options` and
+/// `globals` flag.
+///
+/// Comparing length plus one-way containment is equivalent to true set
+/// equality here only because [_validateOptionScope] already guarantees
+/// neither list holds two options with the same name (nor two with the
+/// same abbreviation): duplicates within a single `globalOptions` list are
+/// already a build-time error, so this cannot be fooled by a duplicate on
+/// one side that the other side is missing.
+bool _sameOptionSet(List<OptionSpec> a, List<OptionSpec> b) =>
+    a.length == b.length && a.every(b.contains);
+
 /// The node reached by following only the leading literal segments of
 /// [segs] from [root], stopping at the first non-literal segment (or the
 /// end). `null` when some literal segment along the way has not been
@@ -448,6 +464,13 @@ int _skipWidthFor(
 CliRoute? _lookAheadRoute(_TrieNode node, List<String> remaining) {
   var n = node;
   for (final tok in remaining) {
+    // An option-shaped token is never a literal route word or a required
+    // parameter's value: simulating either transition for it would walk to
+    // the wrong node (spec 8.2 rule a: misplacement is decided from the
+    // subtree still reachable, never by treating an option token as a
+    // param during lookahead). Stop here; the caller falls back to
+    // `_routesInSubtreeDeclaring` when this returns an inconclusive route.
+    if (looksLikeOption(tok)) break;
     final lit = n.literalChildren[tok];
     if (lit != null) {
       n = lit;

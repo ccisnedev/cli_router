@@ -14,10 +14,12 @@ resolution model, not an incremental change.
 
 ### Added
 - `OptionSpec`: a route's or router's option schema, declared up front.
-  `OptionSpec.flag(name, {abbr, required repeatable})` for a presence-only
-  option; `OptionSpec.value(name, {abbr, required required, required
-  repeatable})` for one that takes a value. Both validate `name` and `abbr`
-  immediately, at construction.
+  `OptionSpec.flag(name, {required abbr, required repeatable})` for a
+  presence-only option; `OptionSpec.value(name, {required abbr, required
+  required, required repeatable})` for one that takes a value. `abbr` is a
+  required named parameter (its type stays `String?`; pass `abbr: null`
+  for an option with no short form) so a caller cannot silently forget it.
+  Both validate `name` and `abbr` immediately, at construction.
 - `ParsedOption`: one occurrence of an option exactly as written
   (`spec`, `written`, `argvIndex`, `value`, `attached`). Parsing is lossless:
   every occurrence of a repeatable option produces its own `ParsedOption`, in
@@ -42,7 +44,13 @@ resolution model, not an incremental change.
   then in the mounting router's own middleware, so nested mounts compose
   outermost-mounting-router-first at every level. A word the mounted router
   reserves without a route of its own (e.g. through one of its own empty
-  mounts) stays reserved here too.
+  mounts) stays reserved here too. The mounted router's own `globalOptions`
+  must equal the mounting router's, by shape, as a set (declaration order
+  does not matter): a program has exactly one set of global options, shared
+  by every mounted subrouter, so `mount()` throws an `ArgumentError` when
+  they differ, rather than silently dropping the mounted router's globals
+  (only each route's own `options` and `globals` flag were ever carried
+  across; the subrouter's `_globalOptions` itself was not).
 - Grammar (spec G): a route pattern where a literal word follows a
   parameter, optional parameter, or wildcard segment is an `ArgumentError`
   at `cmd()`, e.g. `'show <id> details'`. Route words are grammar; params,
@@ -147,6 +155,31 @@ resolution model, not an incremental change.
   the union, so an option belonging only to the parameter route is still
   readable there; whether it is actually accepted is still decided by the
   specific route resolution lands on (see `unknownOption` above).
+- `missingArgument` (a required parameter with no value left in argv) now
+  revalidates every option already read against the one route still
+  reachable, before reporting the missing value: once the resolver knows
+  unambiguously which route the invocation would land on, an option that
+  route rejects is `unknownOption`, naming it, in preference to
+  `missingArgument` (spec 8.6: help, and any other option, loses to an
+  option error once the route is known). `missingArgument` at a position
+  where more than one route is still reachable, or where none of the
+  already-read options mismatch, is unaffected and still carries no route.
+- `_lookAheadRoute` (used only to name a route in a `misplacedOption`
+  message) no longer treats an option-shaped token as a literal route word
+  or a required parameter's value while walking ahead: an option token now
+  always stops the lookahead there, so an interrupted lookahead falls back
+  to subtree declaration (spec 8.2 rule a) instead of walking to, and
+  naming, the wrong route.
+- `cmd()` and `CliRouter`'s constructor now store `List.unmodifiable`
+  copies of a route's `options` and of `globalOptions`: mutating the list
+  passed in after registration no longer changes the registered route or
+  router.
+- `'--'` after the first operand has started is now `misplacedOption`
+  ("'--' goes before the program"), not silently absorbed. Previously
+  `<program> one --` resolved the same as `<program> one`, and `run *`
+  with `run a -- --help` resolved with `rest: [a, --help]`, both silently
+  dropping or reinterpreting the `--` the caller actually typed. `'--'`
+  before the first operand is unaffected: it still ends option parsing.
 
 ### Removed
 - `CliRequest.flags` (the lossy, string-keyed flag map) and the

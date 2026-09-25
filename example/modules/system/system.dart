@@ -1,7 +1,7 @@
 import 'package:cli_router/cli_router.dart';
 
-CliRouter buildSystemModule() {
-  final r = CliRouter(globalOptions: const []);
+CliRouter buildSystemModule({required List<OptionSpec> globalOptions}) {
+  final r = CliRouter(globalOptions: globalOptions);
 
   r.cmd(
     'version',

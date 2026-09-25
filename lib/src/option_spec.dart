@@ -31,7 +31,7 @@ bool looksLikeOption(String token) {
 class OptionSpec {
   /// A flag: present or absent, never carries a value. Flags are never
   /// required (there is nothing to be "missing"; either it was read or not).
-  OptionSpec.flag(this.name, {this.abbr, required this.repeatable})
+  OptionSpec.flag(this.name, {required this.abbr, required this.repeatable})
     : takesValue = false,
       required = false {
     _validate();
@@ -41,7 +41,7 @@ class OptionSpec {
   /// `-n=value`, which is not a valid short form).
   OptionSpec.value(
     this.name, {
-    this.abbr,
+    required this.abbr,
     required this.required,
     required this.repeatable,
   }) : takesValue = true {

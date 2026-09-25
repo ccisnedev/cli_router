@@ -20,7 +20,7 @@ part 'trie.dart';
 /// parameter: the router applies no defaults and guesses nothing.
 class CliRouter {
   CliRouter({required List<OptionSpec> globalOptions})
-    : _globalOptions = globalOptions {
+    : _globalOptions = List.unmodifiable(globalOptions) {
     _validateOptionScope(globalOptions, const []);
   }
 
@@ -45,8 +45,9 @@ class CliRouter {
     required bool globals,
     String? description,
   }) {
+    final ownOptions = List<OptionSpec>.unmodifiable(options);
     final segs = _parseSegments(pattern);
-    _validateOptionScope(options, _globalOptions);
+    _validateOptionScope(ownOptions, _globalOptions);
 
     final lastSeg = segs.isEmpty ? null : segs.last;
     final optionalParamName = lastSeg?.kind == _SegKind.optionalParam
@@ -68,7 +69,7 @@ class CliRouter {
     final route = CliRoute(
       pattern: _segsToPatternString(publicSegs),
       positionals: positionals,
-      options: options,
+      options: ownOptions,
       globals: globals,
       optionalParam: optionalParamName,
       hasWildcard: hasWildcard,
@@ -124,6 +125,24 @@ class CliRouter {
         prefix,
         'prefix',
         'a mount prefix must be a plain literal word',
+      );
+    }
+
+    // One program, one set of globals: a mounted router's own global
+    // options must be exactly the parent's, by shape, as a set. Otherwise
+    // the child's globals would either be silently lost (mount() only ever
+    // copies each route's own `options` and `globals` flag, never the
+    // child's `_globalOptions`) or, the other way round, the parent's
+    // globals would silently start applying to routes that never declared
+    // them. Checked before any trie mutation, so a rejected mount leaves
+    // this router untouched.
+    if (!_sameOptionSet(router._globalOptions, _globalOptions)) {
+      throw ArgumentError.value(
+        router,
+        'router',
+        "the mounted router's globalOptions must equal this router's "
+            'globalOptions, by shape, as a set: a program has exactly one '
+            'set of global options, shared by every mounted subrouter',
       );
     }
 
@@ -243,6 +262,18 @@ class CliRouter {
       final r = node.ownRoute;
       if (r == null) {
         if (node.paramChild != null) {
+          // Before reporting the missing parameter, check whether the one
+          // route this invocation can still reach (if resolvable
+          // unambiguously) actually accepts every option already read: an
+          // option the eventual route rejects is a more specific, more
+          // useful error than "missing a value" (spec 8.6: help, and any
+          // other option, loses to an option error once the route is
+          // known).
+          final resolved = _resolvedRouteOf(node, committed: operandStarted);
+          if (resolved != null) {
+            final mismatch = optionsMismatch(resolved);
+            if (mismatch != null) return mismatch;
+          }
           return reject(
             CliRejectionKind.missingArgument,
             message: 'missing a value for <${node.paramName}>',
@@ -281,6 +312,20 @@ class CliRouter {
       final token = argv[i];
 
       if (!afterDoubleDash && token == '--') {
+        // '--' only ever ends option parsing before the program starts;
+        // POSIX option ordering (spec 8.2) puts every option, '--' among
+        // them, before the operand. Once an operand has started, '--' is
+        // not an operand-forwarding marker any more, it is a misplaced
+        // option: silently absorbing it here would make it vanish (an
+        // operand of literally '--' would be indistinguishable from no
+        // '--' at all) or fold what follows into `rest` unexpectedly.
+        if (operandStarted) {
+          return reject(
+            CliRejectionKind.misplacedOption,
+            route: _resolvedRouteOf(node, committed: operandStarted),
+            message: "'--' goes before the program",
+          );
+        }
         afterDoubleDash = true;
         i++;
         continue;

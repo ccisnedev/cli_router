@@ -1,19 +1,21 @@
 import 'package:cli_router/cli_router.dart';
 
-final dryRunOption = OptionSpec.flag('dry-run', repeatable: false);
+final dryRunOption = OptionSpec.flag('dry-run', abbr: null, repeatable: false);
 final threadsOption = OptionSpec.value(
   'threads',
+  abbr: null,
   required: false,
   repeatable: false,
 );
 final carrierOption = OptionSpec.value(
   'carrier',
+  abbr: null,
   required: false,
   repeatable: false,
 );
 
-CliRouter buildOrdersModule() {
-  final r = CliRouter(globalOptions: const []);
+CliRouter buildOrdersModule({required List<OptionSpec> globalOptions}) {
+  final r = CliRouter(globalOptions: globalOptions);
 
   r.cmd(
     'process <orderId>',
@@ -44,7 +46,7 @@ CliRouter buildOrdersModule() {
   );
 
   // Nested mount: `order report daily`, `order report monthly <yyyy-mm>`.
-  final report = CliRouter(globalOptions: const [])
+  final report = CliRouter(globalOptions: globalOptions)
     ..cmd(
       'daily',
       handler((req) {

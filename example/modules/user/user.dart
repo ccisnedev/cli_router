@@ -6,11 +6,11 @@ final limitOption = OptionSpec.value(
   required: false,
   repeatable: false,
 );
-final activeOption = OptionSpec.flag('active', repeatable: false);
+final activeOption = OptionSpec.flag('active', abbr: null, repeatable: false);
 final adminOption = OptionSpec.flag('admin', abbr: 'a', repeatable: false);
 
-CliRouter buildUsersModule() {
-  final r = CliRouter(globalOptions: const []);
+CliRouter buildUsersModule({required List<OptionSpec> globalOptions}) {
+  final r = CliRouter(globalOptions: globalOptions);
 
   r.cmd(
     'list',
