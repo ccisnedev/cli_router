@@ -13,17 +13,26 @@ void main() {
       final router = buildCalculatrixRouter();
       final outcome = router.resolve(['eval', 'rpn', '-f']);
       expect(outcome, isA<CliRejection>());
-      expect((outcome as CliRejection).kind, equals(CliRejectionKind.missingValue));
+      expect(
+        (outcome as CliRejection).kind,
+        equals(CliRejectionKind.missingValue),
+      );
     });
   });
 
   group('regression: --no-x negation is gone', () {
-    test('cx eval rpn --no-file x used to set file=false; now unknownOption', () {
-      final router = buildCalculatrixRouter();
-      final outcome = router.resolve(['eval', 'rpn', '--no-file', 'x']);
-      expect(outcome, isA<CliRejection>());
-      expect((outcome as CliRejection).kind, equals(CliRejectionKind.unknownOption));
-    });
+    test(
+      'cx eval rpn --no-file x used to set file=false; now unknownOption',
+      () {
+        final router = buildCalculatrixRouter();
+        final outcome = router.resolve(['eval', 'rpn', '--no-file', 'x']);
+        expect(outcome, isA<CliRejection>());
+        expect(
+          (outcome as CliRejection).kind,
+          equals(CliRejectionKind.unknownOption),
+        );
+      },
+    );
   });
 
   group('regression: repeated non-repeatable options no longer let the last '
@@ -31,9 +40,14 @@ void main() {
     test('cx eval rpn -f a.rpn -f b.rpn used to keep b.rpn; now '
         'repeatedOption', () {
       final router = buildCalculatrixRouter();
-      final outcome = router.resolve(
-        ['eval', 'rpn', '-f', 'a.rpn', '-f', 'b.rpn'],
-      );
+      final outcome = router.resolve([
+        'eval',
+        'rpn',
+        '-f',
+        'a.rpn',
+        '-f',
+        'b.rpn',
+      ]);
       expect(outcome, isA<CliRejection>());
       expect(
         (outcome as CliRejection).kind,
@@ -105,10 +119,7 @@ void main() {
       final router = buildCalculatrixRouter();
       final outcome = router.resolve(['-1 2 +']);
       expect(outcome, isA<CliResolution>());
-      expect(
-        (outcome as CliResolution).params['program'],
-        equals('-1 2 +'),
-      );
+      expect((outcome as CliResolution).params['program'], equals('-1 2 +'));
     });
 
     test('cx -2.5 : a negative float is an operand', () {

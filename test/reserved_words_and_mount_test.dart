@@ -12,7 +12,14 @@ void main() {
       final router = buildCalculatrixRouter();
       expect(
         router.reservedWords,
-        containsAll(['version', 'doctor', 'upgrade', 'help', 'eval', 'commands']),
+        containsAll([
+          'version',
+          'doctor',
+          'upgrade',
+          'help',
+          'eval',
+          'commands',
+        ]),
       );
     });
 
@@ -49,7 +56,12 @@ void main() {
 
     test('nested mounts flatten transitively', () {
       final innermost = CliRouter();
-      innermost.cmd('show', (req) async => 0, options: const [], globals: false);
+      innermost.cmd(
+        'show',
+        (req) async => 0,
+        options: const [],
+        globals: false,
+      );
 
       final middle = CliRouter();
       middle.mount('b', innermost);

@@ -1,7 +1,7 @@
 name: cli_router
 description: >
   Router for CLIs inspired by shelf_router that uses spaces between segments instead of /
-version: 0.1.1
+version: 0.2.0
 
 repository: https://github.com/macss-dev/cli_router
 homepage: https://github.com/macss-dev/cli_router

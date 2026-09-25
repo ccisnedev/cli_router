@@ -12,26 +12,34 @@ CliRejection _rejected(CliRouter router, List<String> args) {
 }
 
 void main() {
-  group('unknownCommand: root, the word is no route, root has no parameter', () {
-    test('a bad word at the root of a router with no parameter route', () {
-      final router = CliRouter();
-      router.cmd('version', (req) async => 0, options: const [], globals: false);
-      final rejection = _rejected(router, ['bogus']);
-      expect(rejection.kind, equals(CliRejectionKind.unknownCommand));
-      expect(rejection.consumed, isEmpty);
-    });
+  group(
+    'unknownCommand: root, the word is no route, root has no parameter',
+    () {
+      test('a bad word at the root of a router with no parameter route', () {
+        final router = CliRouter();
+        router.cmd(
+          'version',
+          (req) async => 0,
+          options: const [],
+          globals: false,
+        );
+        final rejection = _rejected(router, ['bogus']);
+        expect(rejection.kind, equals(CliRejectionKind.unknownCommand));
+        expect(rejection.consumed, isEmpty);
+      });
 
-    test('a router with a root parameter never reaches unknownCommand', () {
-      // The shortcut absorbs any word, per G3.
-      final router = buildCalculatrixRouter();
-      final outcome = router.resolve(['totally-unknown-word']);
-      expect(outcome, isA<CliResolution>());
-      expect(
-        (outcome as CliResolution).params['program'],
-        equals('totally-unknown-word'),
-      );
-    });
-  });
+      test('a router with a root parameter never reaches unknownCommand', () {
+        // The shortcut absorbs any word, per G3.
+        final router = buildCalculatrixRouter();
+        final outcome = router.resolve(['totally-unknown-word']);
+        expect(outcome, isA<CliResolution>());
+        expect(
+          (outcome as CliResolution).params['program'],
+          equals('totally-unknown-word'),
+        );
+      });
+    },
+  );
 
   group('extraArgument: terminal node, an operand left over', () {
     test('cx version junk', () {
@@ -43,10 +51,7 @@ void main() {
 
     test('an extra operand after a bound optional parameter', () {
       final router = buildCalculatrixRouter();
-      final rejection = _rejected(
-        router,
-        ['eval', 'rpn', '1 2 +', 'extra'],
-      );
+      final rejection = _rejected(router, ['eval', 'rpn', '1 2 +', 'extra']);
       expect(rejection.kind, equals(CliRejectionKind.extraArgument));
     });
 
@@ -60,10 +65,7 @@ void main() {
   group('incomplete: non-terminal node, the operand fits no child', () {
     test('cx commands shwo power', () {
       final router = buildCalculatrixRouter();
-      final rejection = _rejected(
-        router,
-        ['commands', 'shwo', 'power'],
-      );
+      final rejection = _rejected(router, ['commands', 'shwo', 'power']);
       expect(rejection.kind, equals(CliRejectionKind.incomplete));
       expect(rejection.consumed, equals(['commands']));
     });
@@ -94,10 +96,13 @@ void main() {
   group('rejections always carry the consumed literals and options so far', () {
     test('options parsed before a later rejection are preserved', () {
       final router = buildCalculatrixRouter();
-      final rejection = _rejected(
-        router,
-        ['commands', 'show', '--json', 'power', 'extra'],
-      );
+      final rejection = _rejected(router, [
+        'commands',
+        'show',
+        '--json',
+        'power',
+        'extra',
+      ]);
       expect(rejection.kind, equals(CliRejectionKind.extraArgument));
       expect(rejection.options.single.spec.name, equals('json'));
       expect(rejection.consumed, equals(['commands', 'show']));

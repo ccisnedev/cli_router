@@ -28,16 +28,8 @@ void main() {
         globals: false,
       );
       final math = CliRouter();
-      math.cmd(
-        'show',
-        (req) async => 0,
-        options: const [],
-        globals: false,
-      );
-      expect(
-        () => router.mount('math', math),
-        throwsA(isA<StateError>()),
-      );
+      math.cmd('show', (req) async => 0, options: const [], globals: false);
+      expect(() => router.mount('math', math), throwsA(isA<StateError>()));
     });
 
     test('two parameters with different names at the same position', () {
@@ -209,33 +201,28 @@ void main() {
       );
     });
 
-    test(
-      'a route option colliding with a global by shape is fine when globals '
-      'is false',
-      () {
-        final router = CliRouter(
-          globalOptions: [
-            OptionSpec.flag('json', abbr: null, repeatable: false),
+    test('a route option colliding with a global by shape is fine when globals '
+        'is false', () {
+      final router = CliRouter(
+        globalOptions: [OptionSpec.flag('json', abbr: null, repeatable: false)],
+      );
+      expect(
+        () => router.cmd(
+          'eval rpn',
+          (req) async => 0,
+          options: [
+            OptionSpec.value(
+              'json',
+              abbr: null,
+              required: false,
+              repeatable: false,
+            ),
           ],
-        );
-        expect(
-          () => router.cmd(
-            'eval rpn',
-            (req) async => 0,
-            options: [
-              OptionSpec.value(
-                'json',
-                abbr: null,
-                required: false,
-                repeatable: false,
-              ),
-            ],
-            globals: false,
-          ),
-          returnsNormally,
-        );
-      },
-    );
+          globals: false,
+        ),
+        returnsNormally,
+      );
+    });
 
     test('same option declared identically twice in the same route list', () {
       final router = CliRouter();

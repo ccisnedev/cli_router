@@ -25,21 +25,18 @@ void main() {
       expect(rejection.options.single.written, equals('--help'));
     });
 
-    test(
-      'commands show --help: missingArgument, carries [help], consumed '
-      '[commands, show]',
-      () {
-        final router = buildCalculatrixRouter();
-        final outcome = router.resolve(['commands', 'show', '--help']);
+    test('commands show --help: missingArgument, carries [help], consumed '
+        '[commands, show]', () {
+      final router = buildCalculatrixRouter();
+      final outcome = router.resolve(['commands', 'show', '--help']);
 
-        expect(outcome, isA<CliRejection>());
-        final rejection = outcome as CliRejection;
-        expect(rejection.kind, equals(CliRejectionKind.missingArgument));
-        expect(rejection.consumed, equals(['commands', 'show']));
-        expect(rejection.options, hasLength(1));
-        expect(rejection.options.single.spec.name, equals('help'));
-      },
-    );
+      expect(outcome, isA<CliRejection>());
+      final rejection = outcome as CliRejection;
+      expect(rejection.kind, equals(CliRejectionKind.missingArgument));
+      expect(rejection.consumed, equals(['commands', 'show']));
+      expect(rejection.options, hasLength(1));
+      expect(rejection.options.single.spec.name, equals('help'));
+    });
 
     test('a global read at a branching node does not need that node to '
         'declare its own route', () {
@@ -54,20 +51,17 @@ void main() {
       expect(rejection.options.single.spec.name, equals('quiet'));
     });
 
-    test(
-      'a route-specific option is still misplaced at an ancestor node, '
-      'even though globals are in scope there',
-      () {
-        final router = buildCalculatrixRouter();
-        // -f belongs to 'eval rpn' / 'eval infix', not to 'eval' itself.
-        final outcome = router.resolve(['eval', '-f', 'p.rpn', 'rpn']);
+    test('a route-specific option is still misplaced at an ancestor node, '
+        'even though globals are in scope there', () {
+      final router = buildCalculatrixRouter();
+      // -f belongs to 'eval rpn' / 'eval infix', not to 'eval' itself.
+      final outcome = router.resolve(['eval', '-f', 'p.rpn', 'rpn']);
 
-        expect(outcome, isA<CliRejection>());
-        final rejection = outcome as CliRejection;
-        expect(rejection.kind, equals(CliRejectionKind.misplacedOption));
-        expect(rejection.route?.pattern, equals('eval rpn'));
-      },
-    );
+      expect(outcome, isA<CliRejection>());
+      final rejection = outcome as CliRejection;
+      expect(rejection.kind, equals(CliRejectionKind.misplacedOption));
+      expect(rejection.route?.pattern, equals('eval rpn'));
+    });
 
     test('a genuinely unknown option at a branching node is unknownOption, '
         'not incomplete', () {
@@ -108,7 +102,10 @@ void main() {
       expect(outcome, isA<CliRejection>());
       final rejection = outcome as CliRejection;
       expect(rejection.kind, equals(CliRejectionKind.missingRequiredOption));
-      expect(rejection.options.map((o) => o.spec.name), equals(['json', 'force']));
+      expect(
+        rejection.options.map((o) => o.spec.name),
+        equals(['json', 'force']),
+      );
     });
 
     test('present required option succeeds instead of rejecting', () {

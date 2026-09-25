@@ -49,19 +49,18 @@ void main() {
 
     test('value option followed by something option-like: missingValue', () {
       final router = buildCalculatrixRouter();
-      final rejection = _resolveRejected(
-        router,
-        ['eval', 'rpn', '--file', '--stdin'],
-      );
+      final rejection = _resolveRejected(router, [
+        'eval',
+        'rpn',
+        '--file',
+        '--stdin',
+      ]);
       expect(rejection.kind, equals(CliRejectionKind.missingValue));
     });
 
     test('a value that looks like an option must be attached with =', () {
       final router = buildCalculatrixRouter();
-      final result = _resolveOk(
-        router,
-        ['eval', 'rpn', '--file=-x.rpn'],
-      );
+      final result = _resolveOk(router, ['eval', 'rpn', '--file=-x.rpn']);
       expect(result.options.single.value, equals('-x.rpn'));
     });
   });
@@ -76,10 +75,11 @@ void main() {
 
     test('--stdin=true is unexpectedValue', () {
       final router = buildCalculatrixRouter();
-      final rejection = _resolveRejected(
-        router,
-        ['eval', 'rpn', '--stdin=true'],
-      );
+      final rejection = _resolveRejected(router, [
+        'eval',
+        'rpn',
+        '--stdin=true',
+      ]);
       expect(rejection.kind, equals(CliRejectionKind.unexpectedValue));
     });
 
@@ -87,18 +87,17 @@ void main() {
       final router = buildCalculatrixRouter();
       final result = _resolveOk(router, ['eval', 'rpn', '--stdin', 'true']);
       expect(result.params['program'], equals('true'));
-      expect(
-        result.options.where((o) => o.spec.name == 'stdin'),
-        hasLength(1),
-      );
+      expect(result.options.where((o) => o.spec.name == 'stdin'), hasLength(1));
     });
 
     test('--no-x has no special meaning: unknownOption unless declared', () {
       final router = buildCalculatrixRouter();
-      final rejection = _resolveRejected(
-        router,
-        ['eval', 'rpn', '--no-file', 'x'],
-      );
+      final rejection = _resolveRejected(router, [
+        'eval',
+        'rpn',
+        '--no-file',
+        'x',
+      ]);
       expect(rejection.kind, equals(CliRejectionKind.unknownOption));
     });
   });
@@ -112,47 +111,59 @@ void main() {
 
     test('-fvalue is invalidShortOption', () {
       final router = buildCalculatrixRouter();
-      final rejection = _resolveRejected(
-        router,
-        ['eval', 'rpn', '-fprog.rpn'],
-      );
+      final rejection = _resolveRejected(router, ['eval', 'rpn', '-fprog.rpn']);
       expect(rejection.kind, equals(CliRejectionKind.invalidShortOption));
     });
 
     test('-f=value is invalidShortOption (no such form)', () {
       final router = buildCalculatrixRouter();
-      final rejection = _resolveRejected(
-        router,
-        ['eval', 'rpn', '-f=prog.rpn'],
-      );
+      final rejection = _resolveRejected(router, [
+        'eval',
+        'rpn',
+        '-f=prog.rpn',
+      ]);
       expect(rejection.kind, equals(CliRejectionKind.invalidShortOption));
     });
 
-    test('a two-letter cluster of unknown letters is still invalidShortOption', () {
-      final router = buildCalculatrixRouter();
-      final rejection = _resolveRejected(router, ['eval', 'rpn', '-xy']);
-      expect(rejection.kind, equals(CliRejectionKind.invalidShortOption));
-    });
+    test(
+      'a two-letter cluster of unknown letters is still invalidShortOption',
+      () {
+        final router = buildCalculatrixRouter();
+        final rejection = _resolveRejected(router, ['eval', 'rpn', '-xy']);
+        expect(rejection.kind, equals(CliRejectionKind.invalidShortOption));
+      },
+    );
   });
 
   group('repeated options', () {
     test('a repeated non-repeatable value option, same spelling', () {
       final router = buildCalculatrixRouter();
-      final rejection = _resolveRejected(
-        router,
-        ['eval', 'rpn', '-f', 'a.rpn', '-f', 'b.rpn'],
-      );
+      final rejection = _resolveRejected(router, [
+        'eval',
+        'rpn',
+        '-f',
+        'a.rpn',
+        '-f',
+        'b.rpn',
+      ]);
       expect(rejection.kind, equals(CliRejectionKind.repeatedOption));
     });
 
-    test('a repeated non-repeatable option, mixing long and short spelling', () {
-      final router = buildCalculatrixRouter();
-      final rejection = _resolveRejected(
-        router,
-        ['eval', 'rpn', '--file', 'a.rpn', '-f', 'b.rpn'],
-      );
-      expect(rejection.kind, equals(CliRejectionKind.repeatedOption));
-    });
+    test(
+      'a repeated non-repeatable option, mixing long and short spelling',
+      () {
+        final router = buildCalculatrixRouter();
+        final rejection = _resolveRejected(router, [
+          'eval',
+          'rpn',
+          '--file',
+          'a.rpn',
+          '-f',
+          'b.rpn',
+        ]);
+        expect(rejection.kind, equals(CliRejectionKind.repeatedOption));
+      },
+    );
 
     test('a repeatable option can occur more than once', () {
       final router = CliRouter();
@@ -178,10 +189,12 @@ void main() {
   group('unknown and required options', () {
     test('an option not declared anywhere is unknownOption', () {
       final router = buildCalculatrixRouter();
-      final rejection = _resolveRejected(
-        router,
-        ['eval', 'rpn', '--trace', '1 2 +'],
-      );
+      final rejection = _resolveRejected(router, [
+        'eval',
+        'rpn',
+        '--trace',
+        '1 2 +',
+      ]);
       expect(rejection.kind, equals(CliRejectionKind.unknownOption));
     });
 
@@ -189,10 +202,13 @@ void main() {
         'unknownOption naming the route', () {
       final router = buildCalculatrixRouter();
       // --category belongs to `commands list`, not to `commands show <name>`.
-      final rejection = _resolveRejected(
-        router,
-        ['commands', 'show', '--category', 'matrix', 'power'],
-      );
+      final rejection = _resolveRejected(router, [
+        'commands',
+        'show',
+        '--category',
+        'matrix',
+        'power',
+      ]);
       expect(rejection.kind, equals(CliRejectionKind.unknownOption));
     });
 

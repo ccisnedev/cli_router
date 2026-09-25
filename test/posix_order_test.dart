@@ -37,10 +37,7 @@ void main() {
   group('rule: an option read after an operand', () {
     test("cx eval rpn '1 2 +' --json", () {
       final router = buildCalculatrixRouter();
-      final rejection = _rejected(
-        router,
-        ['eval', 'rpn', '1 2 +', '--json'],
-      );
+      final rejection = _rejected(router, ['eval', 'rpn', '1 2 +', '--json']);
       expect(rejection.kind, equals(CliRejectionKind.misplacedOption));
     });
 
@@ -67,20 +64,14 @@ void main() {
   group('rule: an option not in scope, declared by a route under the node', () {
     test('cx eval -f p.rpn rpn', () {
       final router = buildCalculatrixRouter();
-      final rejection = _rejected(
-        router,
-        ['eval', '-f', 'p.rpn', 'rpn'],
-      );
+      final rejection = _rejected(router, ['eval', '-f', 'p.rpn', 'rpn']);
       expect(rejection.kind, equals(CliRejectionKind.misplacedOption));
       expect(rejection.route?.pattern, equals('eval rpn'));
     });
 
     test('cx -f prog.rpn eval rpn', () {
       final router = buildCalculatrixRouter();
-      final rejection = _rejected(
-        router,
-        ['-f', 'prog.rpn', 'eval', 'rpn'],
-      );
+      final rejection = _rejected(router, ['-f', 'prog.rpn', 'eval', 'rpn']);
       expect(rejection.kind, equals(CliRejectionKind.misplacedOption));
     });
   });
@@ -120,10 +111,12 @@ void main() {
     test('cx commands show power --json is misplaced (option after the '
         'operand)', () {
       final router = buildCalculatrixRouter();
-      final rejection = _rejected(
-        router,
-        ['commands', 'show', 'power', '--json'],
-      );
+      final rejection = _rejected(router, [
+        'commands',
+        'show',
+        'power',
+        '--json',
+      ]);
       expect(rejection.kind, equals(CliRejectionKind.misplacedOption));
     });
 
@@ -167,10 +160,7 @@ void main() {
     test('cx eval rpn -q -h is valid (two separate short flags)', () {
       final router = buildCalculatrixRouter();
       final result = _ok(router, ['eval', 'rpn', '-q', '-h']);
-      expect(
-        result.options.map((o) => o.spec.name),
-        equals(['quiet', 'help']),
-      );
+      expect(result.options.map((o) => o.spec.name), equals(['quiet', 'help']));
     });
 
     test('cx eval rpn -qh is invalidShortOption', () {
