@@ -211,7 +211,9 @@ void main() {
   group('scope at a node with both a literal child and a param child', () {
     CliRouter buildDualNodeRouter() {
       final router = CliRouter(
-        globalOptions: [OptionSpec.flag('verbose', abbr: 'v', repeatable: false)],
+        globalOptions: [
+          OptionSpec.flag('verbose', abbr: 'v', repeatable: false),
+        ],
       );
       router.cmd('build', (req) async => 0, options: const [], globals: true);
       router.cmd(

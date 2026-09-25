@@ -22,10 +22,12 @@ void main() {
     test('a single mount: the child\'s middleware still runs', () async {
       final calls = <String>[];
       final child = CliRouter(globalOptions: const []);
-      child.use((next) => (req) async {
-        calls.add('child');
-        return next(req);
-      });
+      child.use(
+        (next) => (req) async {
+          calls.add('child');
+          return next(req);
+        },
+      );
       child.cmd(
         'delete',
         (req) async {
@@ -38,51 +40,60 @@ void main() {
       final parent = CliRouter(globalOptions: const []);
       parent.mount('admin', child);
 
-      final code = await parent.run(
-        ['admin', 'delete'],
-        onReject: (r) async => 64,
-      );
+      final code = await parent.run([
+        'admin',
+        'delete',
+      ], onReject: (r) async => 64);
 
       expect(code, equals(0));
       expect(calls, equals(['child', 'handler']));
     });
 
-    test('the parent\'s middleware wraps outside the mounted router\'s own', () async {
-      final calls = <String>[];
-      final child = CliRouter(globalOptions: const []);
-      child.use((next) => (req) async {
-        calls.add('child');
-        return next(req);
-      });
-      child.cmd(
-        'delete',
-        (req) async {
-          calls.add('handler');
-          return 0;
-        },
-        options: const [],
-        globals: false,
-      );
-      final parent = CliRouter(globalOptions: const []);
-      parent.use((next) => (req) async {
-        calls.add('parent');
-        return next(req);
-      });
-      parent.mount('admin', child);
+    test(
+      'the parent\'s middleware wraps outside the mounted router\'s own',
+      () async {
+        final calls = <String>[];
+        final child = CliRouter(globalOptions: const []);
+        child.use(
+          (next) => (req) async {
+            calls.add('child');
+            return next(req);
+          },
+        );
+        child.cmd(
+          'delete',
+          (req) async {
+            calls.add('handler');
+            return 0;
+          },
+          options: const [],
+          globals: false,
+        );
+        final parent = CliRouter(globalOptions: const []);
+        parent.use(
+          (next) => (req) async {
+            calls.add('parent');
+            return next(req);
+          },
+        );
+        parent.mount('admin', child);
 
-      await parent.run(['admin', 'delete'], onReject: (r) async => 64);
+        await parent.run(['admin', 'delete'], onReject: (r) async => 64);
 
-      expect(calls, equals(['parent', 'child', 'handler']));
-    });
+        expect(calls, equals(['parent', 'child', 'handler']));
+      },
+    );
 
     test('nested mounts compose middleware outermost-parent-first at every '
         'level', () async {
       final calls = <String>[];
       final grandchild = CliRouter(globalOptions: const []);
-      grandchild.use((next) => (req) async {
-        calls.add('grandchild');
-        return next(req);
-      });
+      grandchild.use(
+        (next) => (req) async {
+          calls.add('grandchild');
+          return next(req);
+        },
+      );
       grandchild.cmd(
         'run',
         (req) async {
@@ -93,16 +104,20 @@ void main() {
         globals: false,
       );
       final child = CliRouter(globalOptions: const []);
-      child.use((next) => (req) async {
-        calls.add('child');
-        return next(req);
-      });
+      child.use(
+        (next) => (req) async {
+          calls.add('child');
+          return next(req);
+        },
+      );
       child.mount('jobs', grandchild);
       final parent = CliRouter(globalOptions: const []);
-      parent.use((next) => (req) async {
-        calls.add('parent');
-        return next(req);
-      });
+      parent.use(
+        (next) => (req) async {
+          calls.add('parent');
+          return next(req);
+        },
+      );
       parent.mount('admin', child);
 
       await parent.run(['admin', 'jobs', 'run'], onReject: (r) async => 64);
@@ -117,8 +132,18 @@ void main() {
         'literal route word: run value sub is rejected, not resolved to '
         "'run sub'", () {
       final router = CliRouter(globalOptions: const []);
-      router.cmd('run [<arg>]', (req) async => 0, options: const [], globals: false);
-      router.cmd('run sub', (req) async => 0, options: const [], globals: false);
+      router.cmd(
+        'run [<arg>]',
+        (req) async => 0,
+        options: const [],
+        globals: false,
+      );
+      router.cmd(
+        'run sub',
+        (req) async => 0,
+        options: const [],
+        globals: false,
+      );
 
       final rejection = _rejected(router, ['run', 'value', 'sub']);
 
@@ -128,24 +153,47 @@ void main() {
 
     test("'run sub' directly still resolves to the literal route", () {
       final router = CliRouter(globalOptions: const []);
-      router.cmd('run [<arg>]', (req) async => 0, options: const [], globals: false);
-      router.cmd('run sub', (req) async => 0, options: const [], globals: false);
+      router.cmd(
+        'run [<arg>]',
+        (req) async => 0,
+        options: const [],
+        globals: false,
+      );
+      router.cmd(
+        'run sub',
+        (req) async => 0,
+        options: const [],
+        globals: false,
+      );
 
       final result = _ok(router, ['run', 'sub']);
 
       expect(result.route.pattern, equals('run sub'));
     });
 
-    test("'run value' alone still resolves to the optional-parameter route", () {
-      final router = CliRouter(globalOptions: const []);
-      router.cmd('run [<arg>]', (req) async => 0, options: const [], globals: false);
-      router.cmd('run sub', (req) async => 0, options: const [], globals: false);
+    test(
+      "'run value' alone still resolves to the optional-parameter route",
+      () {
+        final router = CliRouter(globalOptions: const []);
+        router.cmd(
+          'run [<arg>]',
+          (req) async => 0,
+          options: const [],
+          globals: false,
+        );
+        router.cmd(
+          'run sub',
+          (req) async => 0,
+          options: const [],
+          globals: false,
+        );
 
-      final result = _ok(router, ['run', 'value']);
+        final result = _ok(router, ['run', 'value']);
 
-      expect(result.route.pattern, equals('run'));
-      expect(result.params['arg'], equals('value'));
-    });
+        expect(result.route.pattern, equals('run'));
+        expect(result.params['arg'], equals('value'));
+      },
+    );
 
     test('an option between two required parameters is misplaced, naming '
         'the route even though one parameter is still pending', () {
@@ -306,19 +354,22 @@ void main() {
       expect(rejection.kind, equals(CliRejectionKind.incomplete));
     });
 
-    test('the same reservation survives being mounted under a parent router', () {
-      final child = CliRouter(globalOptions: const []);
-      final grandchild = CliRouter(globalOptions: const []);
-      child.mount('reserved', grandchild);
-      child.cmd('<arg>', (req) async => 0, options: const [], globals: false);
+    test(
+      'the same reservation survives being mounted under a parent router',
+      () {
+        final child = CliRouter(globalOptions: const []);
+        final grandchild = CliRouter(globalOptions: const []);
+        child.mount('reserved', grandchild);
+        child.cmd('<arg>', (req) async => 0, options: const [], globals: false);
 
-      final parent = CliRouter(globalOptions: const []);
-      parent.mount('a', child);
+        final parent = CliRouter(globalOptions: const []);
+        parent.mount('a', child);
 
-      final rejection = _rejected(parent, ['a', 'reserved']);
+        final rejection = _rejected(parent, ['a', 'reserved']);
 
-      expect(rejection.kind, equals(CliRejectionKind.incomplete));
-    });
+        expect(rejection.kind, equals(CliRejectionKind.incomplete));
+      },
+    );
 
     test('a genuinely free word is still absorbed by the param route once '
         'mounted', () {

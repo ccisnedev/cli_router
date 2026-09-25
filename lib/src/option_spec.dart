@@ -90,6 +90,25 @@ class OptionSpec {
       '${abbr != null ? ', -$abbr' : ''}'
       '${required ? ', required' : ''}'
       '${repeatable ? ', repeatable' : ''})';
+
+  /// Two [OptionSpec]s are the same option when they have the same shape:
+  /// same [name], [abbr], [takesValue], [required] and [repeatable]. This is
+  /// declared-shape equality, not Dart's default reference identity, so two
+  /// separately constructed `OptionSpec`s that describe the same option
+  /// (e.g. one registered on a route and again, identically, on a route
+  /// reachable through its own parameter chain) are recognized as one
+  /// option throughout resolution, not as two unrelated ones (spec 8.2).
+  @override
+  bool operator ==(Object other) =>
+      other is OptionSpec &&
+      name == other.name &&
+      abbr == other.abbr &&
+      takesValue == other.takesValue &&
+      required == other.required &&
+      repeatable == other.repeatable;
+
+  @override
+  int get hashCode => Object.hash(name, abbr, takesValue, required, repeatable);
 }
 
 /// One occurrence of an option, exactly as it was written on the invocation.

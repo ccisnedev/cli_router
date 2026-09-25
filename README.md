@@ -23,7 +23,10 @@ upgrading from 0.1.x.
   options, whether the router's global options apply) is a required, named,
   declared parameter — nothing is inferred or defaulted.
 - `mount('prefix', subRouter)` to graft a subrouter under a single literal
-  word, flattening transitively.
+  word, flattening transitively. The mounted router's own middleware (from
+  its own `use()`) is preserved and runs inside the mounting router's,
+  however many levels of mounting deep; a word it reserves without a route
+  of its own (e.g. through one of its own empty mounts) stays reserved.
 - Route patterns: literal words, required `<name>` parameters, a single
   trailing optional `[<name>]` parameter, or a single trailing `*` wildcard.
 - POSIX option ordering: **route, then options, then operands**. `--` ends
@@ -117,10 +120,16 @@ dart run bin/main.dart module use-case --dry-run --threads 4 1234
 - A route's own required `<name>` continuation cannot coexist with a
   `[<name>]` or `*` at the same position, and a `[<name>]`/`*` must be the
   last segment: both are build-time (registration) errors.
+- **A literal word can never follow a parameter, the optional parameter, or
+  the wildcard**: route words are grammar, parameters and the wildcard are
+  operands, and operands come last. `'show <id> details'` is a build-time
+  (registration) error; write `'show details <id>'` instead if `details` is
+  meant to be a route word.
 
 ```dart
 router.cmd('eval rpn [<program>]', handler, options: [...], globals: true);
 router.cmd('run *', handler, options: const [], globals: false);
+router.cmd('show details <id>', handler, options: const [], globals: false);
 ```
 
 ---
@@ -168,6 +177,26 @@ false`: the global option may still be *readable* earlier in the
 invocation, before the route is known, but it is never accepted once
 resolution lands on a route that opted out. See "Rejection kinds" below.
 
+**A route's own option can never share a name or abbreviation with a
+global, whatever that route's `globals` flag says.** `globals: false` only
+means the route does not accept its own router's globals; it does not free
+up their names or abbreviations for the route to redeclare with a
+different shape. Registering `options: [OptionSpec.value('json', ...)]` on
+a route in a router whose `globalOptions` already has a `json` option is an
+`ArgumentError` at `cmd()`, even with `globals: false`.
+
+**Two `OptionSpec`s are the same option when they have the same declared
+shape** (`name`, `abbr`, `takesValue`, `required`, `repeatable`), not by
+Dart object identity: two separately constructed specs describing `--x` the
+same way are recognized as one option throughout resolution, e.g. when the
+identical option is declared, once per route, on both a route and one
+reachable through its own parameter chain (`'go'` and `'go <arg>'`). Two
+routes reachable from one another through required parameters only that
+declare an option under the same name or abbreviation but a *different*
+shape are an `ArgumentError` at `cmd()`: which declaration would govern is
+otherwise ambiguous, since which of those routes an invocation resolves to
+is only decided after the option is already read.
+
 Reading options back on a resolved request:
 
 ```dart
@@ -192,6 +221,35 @@ cli eval rpn '1 2 +' --json   # misplacedOption: option after the operand
 
 `--` ends option parsing; every token after it is an operand, even if it
 looks like an option.
+
+**The resolver is committed once the first operand starts.** The first
+token read as a required parameter, the optional parameter, or a wildcard
+operand ends the route-and-options phase of the invocation for good: no
+later token can be read as a literal route word (the grammar rule above
+already guarantees no route needs one to), and no later token can be read
+as an option either, even one declared by some other route:
+
+```dart
+router.cmd('run [<arg>]', handler, options: const [], globals: false);
+router.cmd('run sub', handler, options: const [], globals: false);
+```
+
+```bash
+cli run sub           # matches 'run sub'
+cli run value          # matches 'run', arg=value
+cli run value sub      # extraArgument: 'value' already started the operand,
+                       # so 'sub' cannot go back to being a route word
+```
+
+```dart
+router.cmd('copy <src> <dst>', handler, options: const [], globals: true);
+```
+
+```bash
+cli copy --json a b   # valid: the option precedes both operands
+cli copy a --json b   # misplacedOption, naming 'copy <src> <dst>' even
+                       # though <dst> is still pending
+```
 
 ### Which tokens count as options?
 

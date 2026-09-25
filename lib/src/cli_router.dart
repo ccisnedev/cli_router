@@ -21,7 +21,7 @@ part 'trie.dart';
 class CliRouter {
   CliRouter({required List<OptionSpec> globalOptions})
     : _globalOptions = globalOptions {
-    _validateOptionScope(globalOptions, false, const []);
+    _validateOptionScope(globalOptions, const []);
   }
 
   final List<OptionSpec> _globalOptions;
@@ -46,7 +46,7 @@ class CliRouter {
     String? description,
   }) {
     final segs = _parseSegments(pattern);
-    _validateOptionScope(options, globals, _globalOptions);
+    _validateOptionScope(options, _globalOptions);
 
     final lastSeg = segs.isEmpty ? null : segs.last;
     final optionalParamName = lastSeg?.kind == _SegKind.optionalParam
@@ -74,6 +74,14 @@ class CliRouter {
       hasWildcard: hasWildcard,
       description: description,
     );
+
+    // Checked against the trie as it stands before this route is inserted,
+    // so the check never sees itself and the trie is never mutated ahead of
+    // a build-time error (spec 8.2, items 4+5).
+    final existingBoundary = _existingLiteralPrefixNode(_root, segs);
+    if (existingBoundary != null) {
+      _validateSiblingOptionScope(existingBoundary, route);
+    }
 
     final reg = _RegisteredRoute(
       route: route,
@@ -120,13 +128,23 @@ class CliRouter {
     }
 
     // Reserve the word even when the subrouter has no routes of its own yet.
-    _root.literalChildren.putIfAbsent(word, () => _TrieNode());
+    final mountNode = _root.literalChildren.putIfAbsent(
+      word,
+      () => _TrieNode(),
+    );
+
+    // Mirror the subrouter's own literal trie structure (not just its
+    // flattened routes) so that a word it reserves without a route of its
+    // own, e.g. through one of its own empty mounts, stays reserved here
+    // too, rather than being left free for a param route under [word] to
+    // swallow.
+    _mirrorReservedWords(mountNode, router._root);
 
     for (final r in router._flatRoutes) {
       final childPattern = _segsToPatternString(r.segments);
       cmd(
         '$word $childPattern',
-        r.handler,
+        _composeMiddlewares(router._middlewares, r.handler),
         options: r.route.options,
         globals: r.route.globals,
         description: r.route.description,
@@ -137,6 +155,23 @@ class CliRouter {
   /// Adds middleware, applied in registration order around the resolved
   /// route's handler.
   void use(CliMiddleware middleware) => _middlewares.add(middleware);
+
+  /// Wraps [handler] with [middlewares], first-registered outermost: the
+  /// same order [run] applies this router's own [_middlewares] in. Used by
+  /// [run] directly, and by [mount] to bake a mounted router's own
+  /// middleware into the handler it copies, so it still runs (inside
+  /// whatever middleware the mounting router adds of its own) however many
+  /// levels of mounting the route ends up under.
+  static CliHandler _composeMiddlewares(
+    List<CliMiddleware> middlewares,
+    CliHandler handler,
+  ) {
+    var h = handler;
+    for (final mw in middlewares.reversed) {
+      h = mw(h);
+    }
+    return h;
+  }
 
   /// Every literal word reachable as the first token of some route, mount
   /// prefixes included. Useful to check a word is not already taken before
@@ -267,7 +302,7 @@ class CliRouter {
           if (!parsed.spec.repeatable && consumedSpecs.contains(parsed.spec)) {
             return reject(
               CliRejectionKind.repeatedOption,
-              route: _deadEndRouteOf(node),
+              route: _resolvedRouteOf(node, committed: operandStarted),
               message: '${_describeOption(parsed.spec)} was already given',
             );
           }
@@ -277,10 +312,20 @@ class CliRouter {
           continue;
         }
         final failed = outcome as _OptionFailed;
-        return reject(failed.kind, route: failed.route, message: failed.message);
+        return reject(
+          failed.kind,
+          route: failed.route,
+          message: failed.message,
+        );
       }
 
-      if (!afterDoubleDash) {
+      // Once an operand has started (spec 8.2 rule b), the resolver is
+      // committed: no more literal route-word transitions, even if this
+      // exact node still has literal children left over from some other
+      // route's dead branch (grammar G already forbids a literal after a
+      // parameter within a single route, so any left here can only belong
+      // to a route this invocation can no longer take).
+      if (!afterDoubleDash && !operandStarted) {
         final lit = node.literalChildren[token];
         if (lit != null) {
           node = lit;
@@ -295,12 +340,10 @@ class CliRouter {
         final next = node.paramChild!;
         i++;
         node = next;
-        if (node.literalChildren.isEmpty &&
-            node.paramChild == null &&
-            node.optionalParamRoute == null &&
-            node.wildcardRoute == null) {
-          operandStarted = true;
-        }
+        // Grammar G forbids a literal after a parameter, so a node reached
+        // through a required parameter can never have a literal child of
+        // its own left to offer: consuming one always starts the operand.
+        operandStarted = true;
         continue;
       }
 
@@ -344,6 +387,13 @@ class CliRouter {
   /// Resolves and dispatches [args]. [onReject] is required: it takes over
   /// for every invocation that does not resolve to a route, and decides the
   /// process exit code; the router itself never maps a rejection to one.
+  ///
+  /// [stdout] and [stderr] are I/O wiring, not behavior: when `null` (the
+  /// default), they fall back to the real process streams, [io.stdout] and
+  /// [io.stderr]. This is the router's one deliberate default, made only to
+  /// avoid forcing every caller to thread the process streams through by
+  /// hand; pass a fake [io.IOSink] explicitly (e.g. in a test) to capture
+  /// what a handler writes instead.
   Future<int> run(
     List<String> args, {
     required CliRejectionHandler onReject,
@@ -357,10 +407,7 @@ class CliRouter {
       return await onReject(outcome);
     }
     final resolution = outcome as CliResolution;
-    var h = resolution.handler;
-    for (final mw in _middlewares.reversed) {
-      h = mw(h);
-    }
+    final h = _composeMiddlewares(_middlewares, resolution.handler);
     final req = CliRequest(
       originalArgs: args,
       route: resolution.route,

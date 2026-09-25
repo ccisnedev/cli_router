@@ -37,6 +37,45 @@ resolution model, not an incremental change.
   single literal `prefix` word. Flattens transitively for nested mounts, and
   re-runs every build-time check (duplicate patterns, option-scope
   collisions, conflicting parameter names) in the parent router's context.
+  The mounted router's own middleware (added to it with `use`) is preserved:
+  each grafted handler is wrapped in the mounted router's middleware first,
+  then in the mounting router's own middleware, so nested mounts compose
+  outermost-mounting-router-first at every level. A word the mounted router
+  reserves without a route of its own (e.g. through one of its own empty
+  mounts) stays reserved here too.
+- Grammar (spec G): a route pattern where a literal word follows a
+  parameter, optional parameter, or wildcard segment is an `ArgumentError`
+  at `cmd()`, e.g. `'show <id> details'`. Route words are grammar; params,
+  the optional param, and the wildcard are operands; and once an operand
+  starts, the pattern cannot go back to route vocabulary. Every pattern
+  used anywhere in this package (tests, README, the example) now places its
+  literal words before its parameters.
+- Grammar, at resolution time: once the first operand of an invocation is
+  consumed (a required parameter, the optional parameter, or the
+  wildcard), the resolver is committed. No further token can be read as a
+  literal route word, and no further option can be read: an option after
+  that point is `misplacedOption`, naming the route when it is already
+  known unambiguously (which can happen even with a further required
+  parameter still pending, as long as exactly one route remains reachable
+  from there through parameters alone).
+- `OptionSpec` now overrides `==`/`hashCode` by declared shape: two
+  separately constructed `OptionSpec`s with the same `name`, `abbr`,
+  `takesValue`, `required` and `repeatable` are the same option throughout
+  resolution (consumed-option tracking, required-option checks, scope
+  checks), not two unrelated ones, even when registered as two distinct
+  instances on different routes.
+- Build-time: two routes reachable from one another through required
+  parameters only (i.e. in the same `_scopeAt` option-reading position) that
+  declare an option sharing a name or abbreviation but not the identical
+  shape are an `ArgumentError` at `cmd()`. Declaring the identical shape on
+  both is fine (`OptionSpec.==` treats it as the same option); declaring it
+  on unrelated branches that are never reachable through each other is
+  fine too.
+- Build-time: a route option colliding with a global option, by name or
+  abbreviation, is always an `ArgumentError` at `cmd()`, regardless of that
+  route's `globals` flag. `globals: false` only means the route does not
+  accept its own router's globals; it is not license to redeclare their
+  names or abbreviations for something else.
 - `CliRouter.reservedWords`: every literal word reachable as a route's or
   mount's first token, so a caller can check a name is free before adding
   one.
@@ -69,7 +108,10 @@ resolution model, not an incremental change.
   invocation.
 - `CliRouter.run(args, {required onReject, stdout, stderr})`: the I/O entry
   point built on `resolve`. `onReject` is required at the call site; there
-  is no silent default reporting.
+  is no silent default reporting. `stdout`/`stderr` are the one deliberate
+  default in the router: when left `null`, they fall back to `io.stdout`
+  and `io.stderr`; pass a fake sink explicitly (e.g. in a test) to capture
+  what a handler writes instead.
 - `CliRequest.param(name)` and `.option(name)` helpers, alongside
   `route`, `params`, `rest`, `options`, `originalArgs`.
 
@@ -87,6 +129,16 @@ resolution model, not an incremental change.
 - A required option absent at the end of the invocation is
   `missingRequiredOption`, decided only once every option on the invocation
   has been read.
+- `misplacedOption` for an option not in scope but declared somewhere ahead
+  is now decided by whether *some* route still reachable from the current
+  node (through its param child and every literal child, recursively)
+  declares that option, not only by an uninterrupted lookahead walk. An
+  uninterrupted lookahead that reaches exactly one route still names that
+  route, as before; when a second option token interrupts the lookahead
+  before it reaches a route, the option is still reported as
+  `misplacedOption` (naming the one route that declares it, if only one
+  subtree route does; otherwise `route: null`, with every candidate route
+  listed in the message) rather than falling back to `unknownOption`.
 - The option scope at a node not yet resolved to a route (spec 8.2) is now
   the globals plus the options of *every* route reachable from that node
   through required parameters only, not just one deterministic route. A
