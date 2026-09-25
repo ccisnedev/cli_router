@@ -130,7 +130,9 @@ void main() {
       expect(() => router.mount('--bad', sub), throwsArgumentError);
     });
 
-    test('a parameter and a wildcard cannot both sit at the same node', () {
+    test('a parameter and a wildcard may coexist at the same node: a '
+        'literal child wins, then the parameter, then the wildcard (spec '
+        '8.1 section 1), so registering both is not a conflict', () {
       final router = CliRouter(globalOptions: const []);
       router.cmd(
         'eval <program>',
@@ -145,7 +147,22 @@ void main() {
           options: const [],
           globals: false,
         ),
-        throwsA(isA<StateError>()),
+        returnsNormally,
+      );
+    });
+
+    test('a parameter and a wildcard may coexist at the same node, '
+        'registered in the opposite order', () {
+      final router = CliRouter(globalOptions: const []);
+      router.cmd('eval *', (req) async => 0, options: const [], globals: false);
+      expect(
+        () => router.cmd(
+          'eval <program>',
+          (req) async => 0,
+          options: const [],
+          globals: false,
+        ),
+        returnsNormally,
       );
     });
   });
