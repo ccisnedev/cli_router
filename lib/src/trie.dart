@@ -619,20 +619,48 @@ _OptionOutcome _readOption({
         message: "unknown option '$label'",
       );
     }
-    final skip = _skipWidthFor(declared, isLong, hasEquals, argv, i);
-    final remaining = argv.sublist((i + skip).clamp(0, argv.length));
-    final reached = _lookAheadRoute(node, remaining);
-    // Prefer the route an uninterrupted lookahead actually reached, but
-    // only when it is itself one of the candidates: naming a route from
-    // outside the subtree declaration set would be just as wrong as the
-    // root's-own-route failure this is fixing. Otherwise, exactly one
-    // candidate can still be named with certainty; more than one means the
-    // option is misplaced, just not to a single identifiable route, since
-    // which of them this invocation would have reached cannot be known
-    // without the tokens an interruption consumed.
-    final single = reached != null && candidates.contains(reached)
-        ? reached
-        : (candidates.length == 1 ? candidates.single : null);
+    // The shape that actually governs how many tokens this option reads
+    // (flag vs. value, and so the lookahead's skip width) must come from
+    // what is reachable in this subtree, never from `declared`: spec 8.2
+    // lets an unrelated branch declare the same name or abbreviation with
+    // a different shape, and using that unrelated declaration's shape here
+    // would consume the wrong number of tokens, walk lookahead to the
+    // wrong node, and even make the outcome depend on the registration
+    // order `_findAnyDeclaration` happened to search in. Only when every
+    // candidate agrees on the shape is it safe to use for a skip width at
+    // all; when they disagree, guessing one of them is exactly the kind of
+    // guess this must not make.
+    OptionSpec? subtreeShape;
+    var shapesDiffer = false;
+    for (final route in candidates) {
+      final s = _findInScope(route.options, identity, isLong)!;
+      if (subtreeShape == null) {
+        subtreeShape = s;
+      } else if (subtreeShape != s) {
+        shapesDiffer = true;
+        break;
+      }
+    }
+
+    CliRoute? single;
+    if (!shapesDiffer) {
+      final skip = _skipWidthFor(subtreeShape!, isLong, hasEquals, argv, i);
+      final remaining = argv.sublist((i + skip).clamp(0, argv.length));
+      final reached = _lookAheadRoute(node, remaining);
+      // Prefer the route an uninterrupted lookahead actually reached, but
+      // only when it is itself one of the candidates: naming a route from
+      // outside the subtree declaration set would be just as wrong as the
+      // root's-own-route failure this is fixing. Otherwise, exactly one
+      // candidate can still be named with certainty; more than one means
+      // the option is misplaced, just not to a single identifiable route,
+      // since which of them this invocation would have reached cannot be
+      // known without the tokens an interruption consumed.
+      single = reached != null && candidates.contains(reached)
+          ? reached
+          : (candidates.length == 1 ? candidates.single : null);
+    }
+    // shapesDiffer implies at least two candidates disagree, so `single`
+    // is left null: still misplacedOption, with every candidate listed.
     return _OptionFailed(
       CliRejectionKind.misplacedOption,
       route: single,

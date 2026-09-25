@@ -268,8 +268,16 @@ class CliRouter {
           // option the eventual route rejects is a more specific, more
           // useful error than "missing a value" (spec 8.6: help, and any
           // other option, loses to an option error once the route is
-          // known).
-          final resolved = _resolvedRouteOf(node, committed: operandStarted);
+          // known). '--' rules out a leftover literal child exactly as an
+          // operand does (once seen, the loop above never takes a literal
+          // transition again, spec 8.2), so it counts as commitment here
+          // too: without it, a literal sibling '--' has already made
+          // unreachable would still be treated as a live possibility,
+          // keeping this null and masking the option mismatch below it.
+          final resolved = _resolvedRouteOf(
+            node,
+            committed: operandStarted || afterDoubleDash,
+          );
           if (resolved != null) {
             final mismatch = optionsMismatch(resolved);
             if (mismatch != null) return mismatch;

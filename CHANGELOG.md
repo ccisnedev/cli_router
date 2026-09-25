@@ -187,6 +187,27 @@ resolution model, not an incremental change.
   with `run a -- --help` resolved with `rest: [a, --help]`, both silently
   dropping or reinterpreting the `--` the caller actually typed. `'--'`
   before the first operand is unaffected: it still ends option parsing.
+- `'--'`, like an operand, now rules out any literal route word still
+  pending on the current node once it is seen, when deciding whether an
+  unresolved position's route is nonetheless known unambiguously (used to
+  check an already read option against it before reporting
+  `missingArgument`). Previously only an actual operand counted as this
+  commitment, so a node offering both a literal child and a parameter
+  route (e.g. `run <x>` and `run sub`) still treated the literal sibling
+  as reachable after `'--'`, reporting `missingArgument` instead of
+  `unknownOption` naming the one route `'--'` had already settled on.
+- The shape (flag vs. value, required, repeatable) used to decide how many
+  tokens a misplaced option reads, and so which route the lookahead
+  reaches, now comes only from the declarations reachable in the current
+  subtree, never from whichever route `_findAnyDeclaration`'s router-wide
+  search happens to find first. A route entirely outside the current
+  subtree declaring the same name or abbreviation with a different shape
+  (permitted on unrelated branches, spec 8.2) could previously misdirect
+  the skip width and walk lookahead to, and name, the wrong route,
+  with the outcome depending on that unrelated route's registration
+  order. When the subtree's own declarations disagree on the shape, the
+  option is still `misplacedOption`, with `route: null` and every
+  candidate listed, rather than guessing one of their shapes.
 
 ### Removed
 - `CliRequest.flags` (the lossy, string-keyed flag map) and the
