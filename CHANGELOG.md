@@ -167,9 +167,16 @@ resolution model, not an incremental change.
 - `_lookAheadRoute` (used only to name a route in a `misplacedOption`
   message) no longer treats an option-shaped token as a literal route word
   or a required parameter's value while walking ahead: an option token now
-  always stops the lookahead there, so an interrupted lookahead falls back
-  to subtree declaration (spec 8.2 rule a) instead of walking to, and
-  naming, the wrong route.
+  always makes the lookahead return `null`, rather than the node it started
+  from, so a node's own preexisting route (for example a root that has its
+  own `''` route) is never reported as the walk's conclusion just because
+  the walk broke on the first token. Subtree declaration (spec 8.2 rule a)
+  is now checked before, not only after, an uninterrupted lookahead: a
+  route the lookahead actually reaches is only named when that route is
+  itself one of the routes declaring the option somewhere in the subtree,
+  so a route that merely happens to be where the walk lands, without
+  declaring the option, can no longer be misreported as `unknownOption` in
+  place of `misplacedOption`.
 - `cmd()` and `CliRouter`'s constructor now store `List.unmodifiable`
   copies of a route's `options` and of `globalOptions`: mutating the list
   passed in after registration no longer changes the registered route or

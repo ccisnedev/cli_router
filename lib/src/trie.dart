@@ -461,16 +461,22 @@ int _skipWidthFor(
 /// this option token (and its value) were not there. Used only to name the
 /// route in a [CliRejectionKind.misplacedOption] rejection (spec 8.2, rule
 /// c); it never consumes options itself.
+///
+/// Returns `null` the moment [remaining] is interrupted by an option-shaped
+/// token: that token is never a literal route word or a required
+/// parameter's value, so simulating either transition for it would walk to
+/// the wrong node (spec 8.2 rule a). This is deliberately `null`, not
+/// [node]'s own preexisting route: [node] may already own a route from
+/// before this option was ever read (for example the root's own `''`
+/// route), and returning it here would wrongly present that unrelated,
+/// already-resolved route as the conclusive destination of a walk that
+/// never actually got to look at the tokens after the interruption. The
+/// caller falls back to `_routesInSubtreeDeclaring` whenever this returns
+/// an inconclusive `null`.
 CliRoute? _lookAheadRoute(_TrieNode node, List<String> remaining) {
   var n = node;
   for (final tok in remaining) {
-    // An option-shaped token is never a literal route word or a required
-    // parameter's value: simulating either transition for it would walk to
-    // the wrong node (spec 8.2 rule a: misplacement is decided from the
-    // subtree still reachable, never by treating an option token as a
-    // param during lookahead). Stop here; the caller falls back to
-    // `_routesInSubtreeDeclaring` when this returns an inconclusive route.
-    if (looksLikeOption(tok)) break;
+    if (looksLikeOption(tok)) return null;
     final lit = n.literalChildren[tok];
     if (lit != null) {
       n = lit;
@@ -484,13 +490,6 @@ CliRoute? _lookAheadRoute(_TrieNode node, List<String> remaining) {
   }
   return n.ownRoute?.route;
 }
-
-bool _declaresInScope(
-  CliRoute route,
-  String identity,
-  bool isLong,
-  List<OptionSpec> globalOptions,
-) => _findInScope(_routeScope(route, globalOptions), identity, isLong) != null;
 
 bool _peekIsLiteralChild(_TrieNode node, List<String> argv, int idx) =>
     idx < argv.length && node.literalChildren.containsKey(argv[idx]);
@@ -602,54 +601,47 @@ _OptionOutcome _readOption({
         message: "unknown option '$label'",
       );
     }
+    // Whether this is misplacedOption (some route still reachable from
+    // here declares it) or unknownOption (no route reachable from here
+    // does) is decided from the whole subtree rooted at this node (spec
+    // 8.2 rule a), not from a single lookahead guess: an uninterrupted
+    // lookahead can land on a route that does not itself declare the
+    // option (this node's own preexisting route, reached only because
+    // there happen to be no more tokens to walk) while a route still
+    // further down the same subtree does, and the subtree declaration is
+    // the correct answer in that case, whatever route the current node
+    // itself already owns.
+    final candidates = _routesInSubtreeDeclaring(node, identity, isLong);
+    if (candidates.isEmpty) {
+      return _OptionFailed(
+        CliRejectionKind.unknownOption,
+        route: _resolvedRouteOf(node, committed: operandStarted),
+        message: "unknown option '$label'",
+      );
+    }
     final skip = _skipWidthFor(declared, isLong, hasEquals, argv, i);
     final remaining = argv.sublist((i + skip).clamp(0, argv.length));
     final reached = _lookAheadRoute(node, remaining);
-    if (reached != null) {
-      if (_declaresInScope(reached, identity, isLong, globalOptions)) {
-        return _OptionFailed(
-          CliRejectionKind.misplacedOption,
-          route: reached,
-          message:
-              'options go before the program: ${_describeOption(declared)} '
-              "belongs to '${reached.pattern}'",
-        );
-      }
-      return _OptionFailed(
-        CliRejectionKind.unknownOption,
-        route: reached,
-        message:
-            '${_describeOption(declared)} is not accepted by '
-            "'${reached.pattern}'",
-      );
-    }
-    // Lookahead was inconclusive: it was interrupted by a token it does not
-    // simulate (typically another option), or ran out of tokens, so it
-    // cannot say which route this invocation would actually have reached.
-    // Rather than call the option unknown outright, check whether some
-    // route still reachable from here declares it at all (spec 8.2 rule a).
-    // Exactly one match names that route; more than one still means the
+    // Prefer the route an uninterrupted lookahead actually reached, but
+    // only when it is itself one of the candidates: naming a route from
+    // outside the subtree declaration set would be just as wrong as the
+    // root's-own-route failure this is fixing. Otherwise, exactly one
+    // candidate can still be named with certainty; more than one means the
     // option is misplaced, just not to a single identifiable route, since
     // which of them this invocation would have reached cannot be known
-    // without the tokens the interruption consumed.
-    final candidates = _routesInSubtreeDeclaring(node, identity, isLong);
-    if (candidates.isNotEmpty) {
-      final single = candidates.length == 1 ? candidates.single : null;
-      return _OptionFailed(
-        CliRejectionKind.misplacedOption,
-        route: single,
-        message: single != null
-            ? 'options go before the program: ${_describeOption(declared)} '
-                  "belongs to '${single.pattern}'"
-            : 'options go before the program: ${_describeOption(declared)} '
-                  'belongs to one of: '
-                  '${candidates.map((r) => "'${r.pattern}'").join(', ')}',
-      );
-    }
+    // without the tokens an interruption consumed.
+    final single = reached != null && candidates.contains(reached)
+        ? reached
+        : (candidates.length == 1 ? candidates.single : null);
     return _OptionFailed(
-      CliRejectionKind.unknownOption,
-      route: _resolvedRouteOf(node, committed: operandStarted),
-      message: "unknown option '$label'",
+      CliRejectionKind.misplacedOption,
+      route: single,
+      message: single != null
+          ? 'options go before the program: ${_describeOption(declared)} '
+                "belongs to '${single.pattern}'"
+          : 'options go before the program: ${_describeOption(declared)} '
+                'belongs to one of: '
+                '${candidates.map((r) => "'${r.pattern}'").join(', ')}',
     );
   }
 
