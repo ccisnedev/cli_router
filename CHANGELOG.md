@@ -213,15 +213,27 @@ resolution model, not an incremental change.
   `''` pattern): that route only ever matches an invocation with zero
   operands and was never actually resolved to for a nonempty first token,
   so naming it in an `extraArgument` rejection was wrong.
-  `extraArgument` still applies once an operand has actually been bound.
+  `extraArgument` still applies once an operand has actually been bound,
+  including when it was bound to a root optional parameter or wildcard
+  route (e.g. `[<arg>]` alone at the root): binding those never moves the
+  resolver off the root node, so the root `unknownCommand` guard checks
+  whether an operand has been consumed, not merely whether the resolver
+  is still positioned at the root.
 - A node may now register both a required parameter and a trailing `*`
   wildcard (e.g. `run <arg>` and `run *`); they are no longer a
   build-time `StateError`, in either registration order. At resolution
-  time the operand goes to the parameter by default; the wildcard takes
-  over, as a single local decision with no backtracking, only when this
-  is the last token on the invocation and the parameter's own target node
-  cannot complete the route with nothing left over. See `_TrieNode`'s
-  dartdoc for the precedence in full.
+  time, while an operand token remains, it always goes to the parameter,
+  unconditionally: there is no exception for the last token and no
+  lookahead into the parameter's own subtree. The wildcard is reached
+  only when argv ends exactly at that node and the node has no route of
+  its own, where it matches zero operands. Because of this, a trailing
+  optional `[<arg>]` parameter can never coexist with a trailing `*`
+  wildcard at the same position, in either registration order: the
+  optional parameter already matches every operand count, zero or one,
+  that the wildcard could otherwise catch, so the wildcard route could
+  never be reached. Registering both is a build-time `ArgumentError`
+  naming the wildcard route unreachable, replacing the previous, less
+  specific `StateError`. See `_TrieNode`'s dartdoc for the full rule.
 - A `misplacedOption` message now names the option by the declaration
   reachable from the current subtree, never by an unrelated route's
   declaration that `_findAnyDeclaration`'s router-wide search happened to

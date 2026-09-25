@@ -124,18 +124,25 @@ class _RegisteredRoute {
 /// match time (spec 8.1: "a literal child wins ... then the parameter,
 /// then the wildcard, else reject").
 ///
-/// That precedence is a single local decision, made once, with no
-/// backtracking: given a token at a node with both, the token is bound to
-/// [paramChild] by default. The wildcard takes over instead only when
-/// [paramChild]'s own target node cannot, by itself, complete the route
-/// with nothing left over, and this is the last token on the invocation
-/// (the target node's `ownRoute` is `null`, so the parameter's subtree
-/// still needs at least one more token that will never come). Once the
-/// decision is made for a token, it is never revisited: a later token that
-/// the chosen branch cannot accept fails there (`extraArgument` or
-/// `missingArgument`), rather than reopening the choice and trying the
-/// wildcard instead. See the `paramChild != null` branch in
-/// `CliRouter.resolve` for the implementation.
+/// That precedence is unconditional and needs no lookahead: while an operand
+/// token remains, it always goes to [paramChild], with no exception for the
+/// last token and no inspection of the parameter's own subtree. The
+/// wildcard is reached only when argv ends exactly at this node and the
+/// node has no route of its own (`ownRoute` is `null` other than through
+/// [wildcardRoute] itself), where it matches zero operands; see
+/// `CliRouter.resolve`'s `finishHere` closure for the implementation. Once a
+/// token has been bound to [paramChild], the decision is never revisited: a
+/// later token the parameter's subtree cannot accept fails there
+/// (`extraArgument` or `missingArgument`) rather than reopening the choice
+/// and trying the wildcard instead.
+///
+/// [optionalParamRoute] (a final `[<name>]`) and [wildcardRoute] can never
+/// coexist on the same node, in either registration order: an optional
+/// parameter already matches every operand count, zero or one, that a
+/// wildcard at the same position could otherwise catch, so the wildcard
+/// route could never be reached. Registering both is a build-time
+/// [ArgumentError] (see `_unreachableWildcardError`), not a resolution-time
+/// precedence, since no invocation could ever resolve to the wildcard.
 class _TrieNode {
   final Map<String, _TrieNode> literalChildren = {};
   _TrieNode? paramChild;
@@ -239,6 +246,22 @@ void _mirrorReservedWords(_TrieNode target, _TrieNode source) {
   });
 }
 
+/// An [ArgumentError] for registering an optional parameter and a wildcard
+/// at the same trie position, in either order (see the dartdoc on
+/// [_TrieNode] for the full rule). The message names [optionalParam] and
+/// [wildcard] by role, not by which one was registered first or second, so
+/// it reads identically regardless of registration order.
+ArgumentError _unreachableWildcardError(
+  _RegisteredRoute optionalParam,
+  _RegisteredRoute wildcard,
+) => ArgumentError(
+  "the optional parameter route '${_segsToPatternString(optionalParam.segments)}' "
+  "and the wildcard route '${_segsToPatternString(wildcard.segments)}' cannot "
+  'both be registered at the same position: the optional parameter already '
+  'matches every operand count (zero or one) that the wildcard could '
+  'otherwise catch, so the wildcard route would be unreachable',
+);
+
 void _insertSegments(_TrieNode root, List<_Seg> segs, _RegisteredRoute reg) {
   var node = root;
   for (var i = 0; i < segs.length; i++) {
@@ -278,9 +301,10 @@ void _insertSegments(_TrieNode root, List<_Seg> segs, _RegisteredRoute reg) {
             'parameter at the same position',
           );
         }
-        if (node.route != null ||
-            node.optionalParamRoute != null ||
-            node.wildcardRoute != null) {
+        if (node.wildcardRoute != null) {
+          throw _unreachableWildcardError(reg, node.wildcardRoute!);
+        }
+        if (node.route != null || node.optionalParamRoute != null) {
           throw StateError('a route is already registered at this position');
         }
         node.optionalParamRoute = reg;
@@ -289,9 +313,10 @@ void _insertSegments(_TrieNode root, List<_Seg> segs, _RegisteredRoute reg) {
         // A required parameter already registered at this position (a
         // `paramChild`) is not a conflict: see the matching comment in the
         // `requiredParam` case above.
-        if (node.route != null ||
-            node.optionalParamRoute != null ||
-            node.wildcardRoute != null) {
+        if (node.optionalParamRoute != null) {
+          throw _unreachableWildcardError(node.optionalParamRoute!, reg);
+        }
+        if (node.route != null || node.wildcardRoute != null) {
           throw StateError('a route is already registered at this position');
         }
         node.wildcardRoute = reg;
