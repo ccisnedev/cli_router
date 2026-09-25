@@ -127,33 +127,6 @@ void main() {
       expect(result.params['name'], equals('power'));
       expect(result.options.single.spec.name, equals('json'));
     });
-
-    test('a required parameter followed by more literal is still route, '
-        'not an operand: an option there is checked by lookahead', () {
-      final router = CliRouter(globalOptions: const []);
-      router.cmd(
-        'show <id> details',
-        (req) async => 0,
-        options: [OptionSpec.flag('verbose', abbr: 'v', repeatable: false)],
-        globals: false,
-      );
-      final rejection = _rejected(router, ['show', '42', '-v', 'details']);
-      expect(rejection.kind, equals(CliRejectionKind.misplacedOption));
-    });
-
-    test('a required parameter followed by more literal: the option is '
-        'valid once the route is actually complete', () {
-      final router = CliRouter(globalOptions: const []);
-      router.cmd(
-        'show <id> details',
-        (req) async => 0,
-        options: [OptionSpec.flag('verbose', abbr: 'v', repeatable: false)],
-        globals: false,
-      );
-      final result = _ok(router, ['show', '42', 'details', '-v']);
-      expect(result.params['id'], equals('42'));
-      expect(result.options.single.spec.name, equals('verbose'));
-    });
   });
 
   group('short options stand alone (G9), in the middle of an invocation', () {

@@ -61,12 +61,26 @@ void main() {
       );
       expect(
         () => router.cmd(
-          'show <id> details',
+          'show <id> <detail>',
           (req) async => 0,
           options: const [],
           globals: false,
         ),
         returnsNormally,
+      );
+    });
+
+    test('a literal segment after a required parameter is an ArgumentError '
+        '(grammar G: route words come before operands)', () {
+      final router = CliRouter(globalOptions: const []);
+      expect(
+        () => router.cmd(
+          'show <id> details',
+          (req) async => 0,
+          options: const [],
+          globals: false,
+        ),
+        throwsArgumentError,
       );
     });
 
@@ -201,8 +215,8 @@ void main() {
       );
     });
 
-    test('a route option colliding with a global by shape is fine when globals '
-        'is false', () {
+    test('a route option colliding with a global option, same name, is an '
+        'ArgumentError even when globals is false (no shadowing)', () {
       final router = CliRouter(
         globalOptions: [OptionSpec.flag('json', abbr: null, repeatable: false)],
       );
@@ -220,7 +234,30 @@ void main() {
           ],
           globals: false,
         ),
-        returnsNormally,
+        throwsArgumentError,
+      );
+    });
+
+    test('a route option colliding with a global option, same abbreviation, '
+        'is an ArgumentError even when globals is false (no shadowing)', () {
+      final router = CliRouter(
+        globalOptions: [OptionSpec.flag('quiet', abbr: 'q', repeatable: false)],
+      );
+      expect(
+        () => router.cmd(
+          'local',
+          (req) async => 0,
+          options: [
+            OptionSpec.value(
+              'quality',
+              abbr: 'q',
+              required: false,
+              repeatable: false,
+            ),
+          ],
+          globals: false,
+        ),
+        throwsArgumentError,
       );
     });
 
@@ -240,6 +277,110 @@ void main() {
           globals: false,
         ),
         throwsArgumentError,
+      );
+    });
+  });
+
+  group('build-time errors: sibling option scope by shape (spec 8.2)', () {
+    test('two routes sharing a param chain declaring the same option name '
+        'with different shapes is an ArgumentError', () {
+      final router = CliRouter(globalOptions: const []);
+      router.cmd(
+        'go',
+        (req) async => 0,
+        options: [OptionSpec.flag('x', abbr: null, repeatable: false)],
+        globals: false,
+      );
+      expect(
+        () => router.cmd(
+          'go <arg>',
+          (req) async => 0,
+          options: [
+            OptionSpec.value(
+              'x',
+              abbr: null,
+              required: false,
+              repeatable: false,
+            ),
+          ],
+          globals: false,
+        ),
+        throwsArgumentError,
+      );
+    });
+
+    test('two routes sharing a param chain declaring the same abbreviation '
+        'with different shapes is an ArgumentError, even under different '
+        'names', () {
+      final router = CliRouter(globalOptions: const []);
+      router.cmd(
+        'go',
+        (req) async => 0,
+        options: [OptionSpec.flag('extra', abbr: 'x', repeatable: false)],
+        globals: false,
+      );
+      expect(
+        () => router.cmd(
+          'go <arg>',
+          (req) async => 0,
+          options: [
+            OptionSpec.value(
+              'exec',
+              abbr: 'x',
+              required: false,
+              repeatable: false,
+            ),
+          ],
+          globals: false,
+        ),
+        throwsArgumentError,
+      );
+    });
+
+    test('two routes sharing a param chain declaring the same option with '
+        'the identical shape is fine (it is the same option)', () {
+      final router = CliRouter(globalOptions: const []);
+      router.cmd(
+        'go',
+        (req) async => 0,
+        options: [OptionSpec.flag('x', abbr: null, repeatable: false)],
+        globals: false,
+      );
+      expect(
+        () => router.cmd(
+          'go <arg>',
+          (req) async => 0,
+          options: [OptionSpec.flag('x', abbr: null, repeatable: false)],
+          globals: false,
+        ),
+        returnsNormally,
+      );
+    });
+
+    test('the same option name with different shapes on unrelated branches '
+        '(not reachable through each other via params) is fine', () {
+      final router = CliRouter(globalOptions: const []);
+      router.cmd(
+        'alpha',
+        (req) async => 0,
+        options: [OptionSpec.flag('x', abbr: null, repeatable: false)],
+        globals: false,
+      );
+      expect(
+        () => router.cmd(
+          'beta',
+          (req) async => 0,
+          options: [
+            OptionSpec.value(
+              'x',
+              abbr: null,
+              required: false,
+              repeatable: false,
+            ),
+          ],
+          globals: false,
+        ),
+        returnsNormally,
       );
     });
   });
