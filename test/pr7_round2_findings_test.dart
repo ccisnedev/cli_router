@@ -7,6 +7,8 @@
 import 'package:cli_router/cli_router.dart';
 import 'package:test/test.dart';
 
+import 'support.dart';
+
 CliRejection _rejected(CliRouter router, List<String> args) {
   final outcome = router.resolve(args);
   expect(outcome, isA<CliRejection>(), reason: 'for $args, got $outcome');
@@ -152,6 +154,67 @@ void main() {
         'eval',
         'rpn',
       ]);
+
+      expect(rejection.kind, equals(CliRejectionKind.misplacedOption));
+      expect(rejection.route?.pattern, equals('eval rpn'));
+    });
+  });
+
+  group('3b: a parent route of its own (root\'s literal "" route) must not '
+      'make an interrupted lookahead misreport misplacedOption as '
+      'unknownOption against that route, on the real calculatrix fixture', () {
+    test('--file p --help eval rpn: misplacedOption, not unknownOption '
+        'naming the root banner route', () {
+      final router = buildCalculatrixRouter();
+
+      final rejection = _rejected(router, [
+        '--file',
+        'p',
+        '--help',
+        'eval',
+        'rpn',
+      ]);
+
+      expect(rejection.kind, equals(CliRejectionKind.misplacedOption));
+      expect(
+        rejection.route == null ||
+            rejection.route?.pattern == 'eval rpn' ||
+            rejection.route?.pattern == 'eval infix',
+        isTrue,
+        reason: 'got route ${rejection.route?.pattern}',
+      );
+      if (rejection.route == null) {
+        expect(rejection.message, contains('eval rpn'));
+        expect(rejection.message, contains('eval infix'));
+      }
+    });
+
+    test('--file p: misplacedOption with both eval rpn and eval infix as '
+        'candidates, not unknownOption naming the root banner route', () {
+      final router = buildCalculatrixRouter();
+
+      final rejection = _rejected(router, ['--file', 'p']);
+
+      expect(rejection.kind, equals(CliRejectionKind.misplacedOption));
+      expect(rejection.route, isNull);
+      expect(rejection.message, contains('eval rpn'));
+      expect(rejection.message, contains('eval infix'));
+    });
+
+    test('--bogus eval rpn: unknownOption, since no route anywhere '
+        'declares "bogus"', () {
+      final router = buildCalculatrixRouter();
+
+      final rejection = _rejected(router, ['--bogus', 'eval', 'rpn']);
+
+      expect(rejection.kind, equals(CliRejectionKind.unknownOption));
+    });
+
+    test('eval --file p rpn: misplacedOption naming "eval rpn" (the '
+        'uninterrupted case still names its one reachable route)', () {
+      final router = buildCalculatrixRouter();
+
+      final rejection = _rejected(router, ['eval', '--file', 'p', 'rpn']);
 
       expect(rejection.kind, equals(CliRejectionKind.misplacedOption));
       expect(rejection.route?.pattern, equals('eval rpn'));
