@@ -6,7 +6,7 @@ import 'package:test/test.dart';
 void main() {
   group('build-time errors: trie shape (spec 8.1)', () {
     test('two routes with the same pattern', () {
-      final router = CliRouter();
+      final router = CliRouter(globalOptions: const []);
       router.cmd('show', (req) async => 0, options: const [], globals: false);
       expect(
         () => router.cmd(
@@ -20,20 +20,20 @@ void main() {
     });
 
     test('two routes with the same pattern via mount', () {
-      final router = CliRouter();
+      final router = CliRouter(globalOptions: const []);
       router.cmd(
         'math show',
         (req) async => 0,
         options: const [],
         globals: false,
       );
-      final math = CliRouter();
+      final math = CliRouter(globalOptions: const []);
       math.cmd('show', (req) async => 0, options: const [], globals: false);
       expect(() => router.mount('math', math), throwsA(isA<StateError>()));
     });
 
     test('two parameters with different names at the same position', () {
-      final router = CliRouter();
+      final router = CliRouter(globalOptions: const []);
       router.cmd(
         'show <id>',
         (req) async => 0,
@@ -52,7 +52,7 @@ void main() {
     });
 
     test('reusing the same parameter name at the same position is fine', () {
-      final router = CliRouter();
+      final router = CliRouter(globalOptions: const []);
       router.cmd(
         'show <id>',
         (req) async => 0,
@@ -71,7 +71,7 @@ void main() {
     });
 
     test('[<name>] anywhere but last', () {
-      final router = CliRouter();
+      final router = CliRouter(globalOptions: const []);
       expect(
         () => router.cmd(
           'eval [<program>] extra',
@@ -84,7 +84,7 @@ void main() {
     });
 
     test('* anywhere but last', () {
-      final router = CliRouter();
+      final router = CliRouter(globalOptions: const []);
       expect(
         () => router.cmd(
           'files * extra',
@@ -97,7 +97,7 @@ void main() {
     });
 
     test('a literal that looks like an option', () {
-      final router = CliRouter();
+      final router = CliRouter(globalOptions: const []);
       expect(
         () => router.cmd(
           'show --bad',
@@ -110,14 +110,14 @@ void main() {
     });
 
     test('a literal that looks like an option, in a mount prefix', () {
-      final router = CliRouter();
-      final sub = CliRouter();
+      final router = CliRouter(globalOptions: const []);
+      final sub = CliRouter(globalOptions: const []);
       sub.cmd('list', (req) async => 0, options: const [], globals: false);
       expect(() => router.mount('--bad', sub), throwsArgumentError);
     });
 
     test('a parameter and a wildcard cannot both sit at the same node', () {
-      final router = CliRouter();
+      final router = CliRouter(globalOptions: const []);
       router.cmd(
         'eval <program>',
         (req) async => 0,
@@ -138,7 +138,7 @@ void main() {
 
   group('build-time errors: option scope (spec 8.2)', () {
     test('one option name with two shapes in the same route', () {
-      final router = CliRouter();
+      final router = CliRouter(globalOptions: const []);
       expect(
         () => router.cmd(
           'eval rpn',
@@ -159,7 +159,7 @@ void main() {
     });
 
     test('one abbreviation with two shapes in the same route', () {
-      final router = CliRouter();
+      final router = CliRouter(globalOptions: const []);
       expect(
         () => router.cmd(
           'eval rpn',
@@ -225,7 +225,7 @@ void main() {
     });
 
     test('same option declared identically twice in the same route list', () {
-      final router = CliRouter();
+      final router = CliRouter(globalOptions: const []);
       final file = OptionSpec.value(
         'file',
         abbr: 'f',

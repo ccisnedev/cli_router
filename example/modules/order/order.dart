@@ -13,7 +13,7 @@ final carrierOption = OptionSpec.value(
 );
 
 CliRouter buildOrdersModule() {
-  final r = CliRouter();
+  final r = CliRouter(globalOptions: const []);
 
   r.cmd(
     'process <orderId>',
@@ -44,7 +44,7 @@ CliRouter buildOrdersModule() {
   );
 
   // Nested mount: `order report daily`, `order report monthly <yyyy-mm>`.
-  final report = CliRouter()
+  final report = CliRouter(globalOptions: const [])
     ..cmd(
       'daily',
       handler((req) {

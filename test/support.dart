@@ -41,7 +41,7 @@ CliRouter buildCalculatrixRouter() {
     globals: true,
   );
 
-  final eval = CliRouter();
+  final eval = CliRouter(globalOptions: const []);
   eval.cmd(
     'rpn [<program>]',
     (req) async => 0,
@@ -56,7 +56,7 @@ CliRouter buildCalculatrixRouter() {
   );
   router.mount('eval', eval);
 
-  final commands = CliRouter();
+  final commands = CliRouter(globalOptions: const []);
   commands.cmd(
     'list',
     (req) async => 0,

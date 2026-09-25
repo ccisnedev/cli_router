@@ -243,11 +243,13 @@ void main() {
     });
 
     test('the param-only option is readable at the root even ahead of the '
-        'literal child, but rejected once resolution lands on "build" '
-        '(globals: true, no options of its own)', () {
+        'literal child: it is recognized as an option at all (not '
+        'invalidShortOption/unknownOption-undeclared), but is then '
+        'misplaced, since it sits right before the literal route it does '
+        'not belong to', () {
       final router = buildDualNodeRouter();
       final rejection = _rejected(router, ['--force', 'build']);
-      expect(rejection.kind, equals(CliRejectionKind.unknownOption));
+      expect(rejection.kind, equals(CliRejectionKind.misplacedOption));
       expect(rejection.route?.pattern, equals('build'));
       expect(rejection.message, isNotNull);
     });

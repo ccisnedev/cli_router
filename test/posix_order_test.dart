@@ -49,7 +49,7 @@ void main() {
     });
 
     test('an option after an operand consumed via a wildcard', () {
-      final router = CliRouter();
+      final router = CliRouter(globalOptions: const []);
       router.cmd(
         'run *',
         (req) async => 0,
@@ -130,7 +130,7 @@ void main() {
 
     test('a required parameter followed by more literal is still route, '
         'not an operand: an option there is checked by lookahead', () {
-      final router = CliRouter();
+      final router = CliRouter(globalOptions: const []);
       router.cmd(
         'show <id> details',
         (req) async => 0,
@@ -143,7 +143,7 @@ void main() {
 
     test('a required parameter followed by more literal: the option is '
         'valid once the route is actually complete', () {
-      final router = CliRouter();
+      final router = CliRouter(globalOptions: const []);
       router.cmd(
         'show <id> details',
         (req) async => 0,

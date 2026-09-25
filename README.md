@@ -70,7 +70,7 @@ final threadsOption =
     OptionSpec.value('threads', required: false, repeatable: false);
 
 Future<void> main(List<String> args) async {
-  final cli = CliRouter();
+  final cli = CliRouter(globalOptions: const []);
 
   cli.cmd(
     'module use-case <id>',
@@ -146,17 +146,27 @@ final fileOption = OptionSpec.value(
   takes a value, via `--name value`, `--name=value`, or `-n value` (never
   `-n=value`, which is not a valid short form).
 
-A router's own options apply to every route it declares with
-`globals: true`:
+`globalOptions` is required on `CliRouter` (pass `const []` when the router
+has none): every behavior-changing detail is declared, nothing defaults
+silently. A router's own options apply only to routes that opt in with
+`globals: true`; a route declared with `globals: false` never accepts them,
+no matter what the router declares:
 
 ```dart
 final router = CliRouter(globalOptions: [jsonOption]);
 router.cmd('version', handler, options: const [], globals: true);
 router.cmd('eval rpn', handler, options: [fileOption], globals: true);
+router.cmd('<program>', handler, options: const [], globals: false);
 ```
 
-At `eval rpn`, both `--json` and `--file`/`-f` are in scope. At `version`,
-only `--json` is.
+At `eval rpn`, both `--json` and `--file`/`-f` are accepted, because it
+declares `globals: true` and lists `fileOption` itself. At `version`, only
+`--json` is: it also declares `globals: true`, but does not list
+`fileOption`, so `--file`/`-f` there is `unknownOption`. At `<program>`,
+`--json` is `unknownOption` too, because that route declares `globals:
+false`: the global option may still be *readable* earlier in the
+invocation, before the route is known, but it is never accepted once
+resolution lands on a route that opted out. See "Rejection kinds" below.
 
 Reading options back on a resolved request:
 
@@ -217,7 +227,9 @@ belongs to `onReject`.
 final code = await router.run(
   args,
   onReject: (rejection) async {
-    stderr.writeln(rejection.message ?? rejection.kind.toString());
+    // rejection.message is never null: every CliRejection carries a
+    // human readable message.
+    stderr.writeln(rejection.message);
     return 64;
   },
 );
@@ -231,13 +243,19 @@ final code = await router.run(
 | `extraArgument` | A resolved route was reached, but a leftover token fits nowhere in it. |
 | `incomplete` | The invocation ends, or a token fits nothing, at a node that is not itself a route and has no pending required parameter. |
 | `missingArgument` | The invocation ends at a node still waiting on a required parameter. |
-| `unknownOption` | The token is option shaped but declared nowhere reachable. |
+| `unknownOption` | The token is option shaped but declared nowhere reachable, or it is declared somewhere reachable while still resolving (a global, or a sibling route's option) but is not accepted by the specific route the invocation resolves to (`route` names that route). |
 | `misplacedOption` | Declared, but not readable here: written too early or too late for the route it belongs to. |
 | `missingValue` | A value option is the last token, or the next token is option shaped. |
 | `unexpectedValue` | A flag was given a value (`--flag=x`); flags never take one. |
 | `invalidShortOption` | A single-dash token is not exactly one letter (`-qh`, `-f=v`). |
 | `repeatedOption` | A non-repeatable option occurred more than once, under any spelling. |
 | `missingRequiredOption` | A required option was never read, decided only after every option on the invocation was read. |
+
+`CliRejection.message` is never null. `CliRejection.route` is non-null
+whenever the route is already unambiguously resolved at rejection time
+(every literal segment leading to it consumed, no continuation left), and
+null otherwise (`unknownCommand`, `incomplete`, `missingArgument`, and any
+rejection reached before the trie has narrowed to one route).
 
 `CliRejection.options` and `.consumed` always reflect everything read before
 the rejection, including global options like `--help`, even at a node that

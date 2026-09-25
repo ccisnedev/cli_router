@@ -166,7 +166,7 @@ void main() {
     );
 
     test('a repeatable option can occur more than once', () {
-      final router = CliRouter();
+      final router = CliRouter(globalOptions: const []);
       router.cmd(
         'build',
         (req) async => 0,
@@ -213,7 +213,7 @@ void main() {
     });
 
     test('a required option absent is missingRequiredOption', () {
-      final router = CliRouter();
+      final router = CliRouter(globalOptions: const []);
       router.cmd(
         'deploy',
         (req) async => 0,

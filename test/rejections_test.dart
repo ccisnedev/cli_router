@@ -16,7 +16,7 @@ void main() {
     'unknownCommand: root, the word is no route, root has no parameter',
     () {
       test('a bad word at the root of a router with no parameter route', () {
-        final router = CliRouter();
+        final router = CliRouter(globalOptions: const []);
         router.cmd(
           'version',
           (req) async => 0,

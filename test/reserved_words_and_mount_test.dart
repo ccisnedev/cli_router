@@ -29,13 +29,13 @@ void main() {
     });
 
     test('a fresh router has an empty reservedWords', () {
-      final router = CliRouter();
+      final router = CliRouter(globalOptions: const []);
       expect(router.reservedWords, isEmpty);
     });
 
     test('mounting adds the mount prefix as a reserved word', () {
-      final router = CliRouter();
-      final sub = CliRouter();
+      final router = CliRouter(globalOptions: const []);
+      final sub = CliRouter(globalOptions: const []);
       sub.cmd('list', (req) async => 0, options: const [], globals: false);
       router.mount('things', sub);
       expect(router.reservedWords, contains('things'));
@@ -44,8 +44,8 @@ void main() {
 
   group('mount grafting', () {
     test('a mounted route resolves under its prefix', () {
-      final router = CliRouter();
-      final sub = CliRouter();
+      final router = CliRouter(globalOptions: const []);
+      final sub = CliRouter(globalOptions: const []);
       sub.cmd('list', (req) async => 0, options: const [], globals: false);
       router.mount('things', sub);
 
@@ -55,7 +55,7 @@ void main() {
     });
 
     test('nested mounts flatten transitively', () {
-      final innermost = CliRouter();
+      final innermost = CliRouter(globalOptions: const []);
       innermost.cmd(
         'show',
         (req) async => 0,
@@ -63,10 +63,10 @@ void main() {
         globals: false,
       );
 
-      final middle = CliRouter();
+      final middle = CliRouter(globalOptions: const []);
       middle.mount('b', innermost);
 
-      final router = CliRouter();
+      final router = CliRouter(globalOptions: const []);
       router.mount('a', middle);
 
       final outcome = router.resolve(['a', 'b', 'show']);
@@ -75,8 +75,8 @@ void main() {
     });
 
     test('a mount prefix must be a plain literal word, not a pattern', () {
-      final router = CliRouter();
-      final sub = CliRouter();
+      final router = CliRouter(globalOptions: const []);
+      final sub = CliRouter(globalOptions: const []);
       sub.cmd('list', (req) async => 0, options: const [], globals: false);
       expect(() => router.mount('<name>', sub), throwsArgumentError);
       expect(() => router.mount('a b', sub), throwsArgumentError);
@@ -88,7 +88,7 @@ void main() {
       final router = CliRouter(
         globalOptions: [OptionSpec.flag('json', abbr: null, repeatable: false)],
       );
-      final sub = CliRouter();
+      final sub = CliRouter(globalOptions: const []);
       sub.cmd(
         'list',
         (req) async => 0,
@@ -99,22 +99,22 @@ void main() {
     });
 
     test('build-time checks re-fire after grafting: duplicate pattern', () {
-      final router = CliRouter();
+      final router = CliRouter(globalOptions: const []);
       router.cmd(
         'things list',
         (req) async => 0,
         options: const [],
         globals: false,
       );
-      final sub = CliRouter();
+      final sub = CliRouter(globalOptions: const []);
       sub.cmd('list', (req) async => 0, options: const [], globals: false);
       expect(() => router.mount('things', sub), throwsA(isA<StateError>()));
     });
 
     test('mounting an empty router (no routes) is a no-op that still '
         'reserves the prefix word', () {
-      final router = CliRouter();
-      final sub = CliRouter();
+      final router = CliRouter(globalOptions: const []);
+      final sub = CliRouter(globalOptions: const []);
       router.mount('things', sub);
       expect(router.reservedWords, contains('things'));
       final outcome = router.resolve(['things']);

@@ -108,29 +108,68 @@ class _TrieNode {
       route ?? optionalParamRoute ?? wildcardRoute;
 }
 
-/// The single route reachable from [start] without reading any more of the
-/// invocation, when that is unambiguous: a chain of nodes that each have no
-/// possible continuation other than a required parameter, ending at a node
-/// with its own route. `null` when [start] is itself branching (more than
-/// one possible continuation), since which route eventually applies then
-/// depends on a token not read yet.
+/// Every route reachable from [start] by consuming zero or more required
+/// parameters only, never a literal word: [start] itself, then its param
+/// child, then that node's param child, and so on (a node has at most one
+/// param child, so this walk never branches). A single node along the way
+/// can contribute a route of its own, so more than one route can come back,
+/// e.g. a root that has both its own `''` route and, through its param
+/// child, a `<program>` route.
 ///
-/// Used only to widen the option scope at a pre-route node so an option
-/// declared by the one route ahead can be read before its required
-/// parameters, e.g. `greet --loud <name>`.
-_RegisteredRoute? _deterministicRoute(_TrieNode start) {
+/// Used to compute the exploratory option scope at a node that has not
+/// finished resolving yet (spec 8.2): every literal child is a route not
+/// yet chosen, so its options are not offered here, but every route
+/// reachable through required parameters alone might still be the one this
+/// invocation resolves to, so its options are offered.
+List<_RegisteredRoute> _routesReachableViaParamsOnly(_TrieNode start) {
+  final routes = <_RegisteredRoute>[];
   var n = start;
   while (true) {
     final own = n.ownRoute;
-    if (own != null) return own;
-    final onlyPath =
-        n.paramChild != null &&
-        n.literalChildren.isEmpty &&
-        n.optionalParamRoute == null &&
-        n.wildcardRoute == null;
-    if (!onlyPath) return null;
+    if (own != null) routes.add(own);
+    if (n.paramChild == null) break;
     n = n.paramChild!;
   }
+  return routes;
+}
+
+/// The exact option scope of one already known [route]: its own options,
+/// plus [globalOptions] only when this specific route accepts globals.
+/// Unlike [_scopeAt], this is never widened for ambiguity, since the route
+/// is fixed; it is what actually governs whether a given option is accepted
+/// once resolution reaches this route.
+List<OptionSpec> _routeScope(CliRoute route, List<OptionSpec> globalOptions) =>
+    route.globals ? [...route.options, ...globalOptions] : route.options;
+
+/// The option scope at [node] while still resolving: the globals (always,
+/// since which route this invocation lands on, and whether it accepts
+/// globals, is not decided yet) plus the options of every route reachable
+/// from [node] through required parameters only (spec 8.2). This decides
+/// only whether a token is readable as an option at all at this position;
+/// it does not mean every route reachable from here actually accepts it.
+/// [_routeScope] is what a resolved route is checked against once
+/// resolution is done.
+List<OptionSpec> _scopeAt(_TrieNode node, List<OptionSpec> globalOptions) => [
+  ...globalOptions,
+  for (final r in _routesReachableViaParamsOnly(node)) ...r.route.options,
+];
+
+/// `spec.name` for an option, prefixed with its abbreviation when it has
+/// one, for human readable rejection messages: `-f (--file)` or `--stdin`.
+String _describeOption(OptionSpec spec) =>
+    spec.abbr != null ? '-${spec.abbr} (--${spec.name})' : '--${spec.name}';
+
+/// The one route [node] has already, unambiguously, resolved to: every
+/// literal segment leading here has been consumed and no continuation
+/// remains beyond this node's own terminal route (no literal child, no
+/// param child). `null` while [node] could still lead to more than one
+/// route, since naming a route then would be premature.
+CliRoute? _deadEndRouteOf(_TrieNode node) {
+  final own = node.ownRoute;
+  if (own == null) return null;
+  if (node.literalChildren.isNotEmpty) return null;
+  if (node.paramChild != null) return null;
+  return own.route;
 }
 
 void _insertSegments(_TrieNode root, List<_Seg> segs, _RegisteredRoute reg) {
@@ -259,9 +298,10 @@ class _OptionRead extends _OptionOutcome {
 }
 
 class _OptionFailed extends _OptionOutcome {
-  _OptionFailed(this.kind, [this.route]);
+  _OptionFailed(this.kind, {this.route, this.message});
   final CliRejectionKind kind;
   final CliRoute? route;
+  final String? message;
 }
 
 OptionSpec? _findInScope(List<OptionSpec> scope, String identity, bool isLong) {
@@ -329,12 +369,8 @@ bool _declaresInScope(
   String identity,
   bool isLong,
   List<OptionSpec> globalOptions,
-) {
-  final scope = route.globals
-      ? [...route.options, ...globalOptions]
-      : route.options;
-  return _findInScope(scope, identity, isLong) != null;
-}
+) =>
+    _findInScope(_routeScope(route, globalOptions), identity, isLong) != null;
 
 bool _peekIsLiteralChild(_TrieNode node, List<String> argv, int idx) =>
     idx < argv.length && node.literalChildren.containsKey(argv[idx]);
@@ -367,7 +403,18 @@ _OptionOutcome _readOption({
   } else {
     final rest = token.substring(1);
     if (rest.length != 1 || !_letter.hasMatch(rest)) {
-      return _OptionFailed(CliRejectionKind.invalidShortOption);
+      final isCluster =
+          rest.isNotEmpty && RegExp(r'^[A-Za-z]+$').hasMatch(rest);
+      final message = isCluster
+          ? 'short options stand alone: '
+                '${rest.split('').map((c) => '-$c').join(' ')}'
+          : 'the value goes apart: -${rest[0]} '
+                '${rest.substring(1).replaceFirst(RegExp('^='), '')}';
+      return _OptionFailed(
+        CliRejectionKind.invalidShortOption,
+        route: _deadEndRouteOf(node),
+        message: message,
+      );
     }
     identity = rest;
   }
@@ -375,10 +422,17 @@ _OptionOutcome _readOption({
   // Rule (b), spec 8.2: an option read after an operand has started is
   // always misplaced, regardless of whether it is declared or known here.
   if (operandStarted) {
-    return _OptionFailed(CliRejectionKind.misplacedOption);
+    return _OptionFailed(
+      CliRejectionKind.misplacedOption,
+      route: _deadEndRouteOf(node),
+      message:
+          'options go before the program: an option cannot follow an '
+          'operand',
+    );
   }
 
   final spec = _findInScope(scope, identity, isLong);
+  final label = isLong ? '--$identity' : '-$identity';
 
   if (spec == null) {
     final declared = _findAnyDeclaration(
@@ -388,24 +442,55 @@ _OptionOutcome _readOption({
       isLong,
     );
     if (declared == null) {
-      return _OptionFailed(CliRejectionKind.unknownOption);
+      return _OptionFailed(
+        CliRejectionKind.unknownOption,
+        route: _deadEndRouteOf(node),
+        message: "unknown option '$label'",
+      );
     }
     final skip = _skipWidthFor(declared, isLong, hasEquals, argv, i);
     final remaining = argv.sublist((i + skip).clamp(0, argv.length));
     final reached = _lookAheadRoute(node, remaining);
-    if (reached != null &&
-        _declaresInScope(reached, identity, isLong, globalOptions)) {
-      return _OptionFailed(CliRejectionKind.misplacedOption, reached);
+    if (reached != null) {
+      if (_declaresInScope(reached, identity, isLong, globalOptions)) {
+        return _OptionFailed(
+          CliRejectionKind.misplacedOption,
+          route: reached,
+          message:
+              'options go before the program: ${_describeOption(declared)} '
+              "belongs to '${reached.pattern}'",
+        );
+      }
+      return _OptionFailed(
+        CliRejectionKind.unknownOption,
+        route: reached,
+        message:
+            '${_describeOption(declared)} is not accepted by '
+            "'${reached.pattern}'",
+      );
     }
-    return _OptionFailed(CliRejectionKind.unknownOption);
+    return _OptionFailed(
+      CliRejectionKind.unknownOption,
+      route: _deadEndRouteOf(node),
+      message: "unknown option '$label'",
+    );
   }
 
   if (!spec.takesValue) {
     if (hasEquals) {
-      return _OptionFailed(CliRejectionKind.unexpectedValue);
+      return _OptionFailed(
+        CliRejectionKind.unexpectedValue,
+        route: _deadEndRouteOf(node),
+        message: '${_describeOption(spec)} takes no value',
+      );
     }
     if (_peekIsLiteralChild(node, argv, i + 1)) {
-      return _OptionFailed(CliRejectionKind.misplacedOption);
+      final reached = _lookAheadRoute(node, argv.sublist(i + 1));
+      return _OptionFailed(
+        CliRejectionKind.misplacedOption,
+        route: reached,
+        message: _misplacedAheadMessage(spec, reached),
+      );
     }
     return _OptionRead(
       ParsedOption(
@@ -421,7 +506,12 @@ _OptionOutcome _readOption({
 
   if (isLong && hasEquals) {
     if (_peekIsLiteralChild(node, argv, i + 1)) {
-      return _OptionFailed(CliRejectionKind.misplacedOption);
+      final reached = _lookAheadRoute(node, argv.sublist(i + 1));
+      return _OptionFailed(
+        CliRejectionKind.misplacedOption,
+        route: reached,
+        message: _misplacedAheadMessage(spec, reached),
+      );
     }
     return _OptionRead(
       ParsedOption(
@@ -439,10 +529,19 @@ _OptionOutcome _readOption({
   final nextIsOptionLike =
       hasNext && (argv[i + 1] == '--' || looksLikeOption(argv[i + 1]));
   if (!hasNext || nextIsOptionLike) {
-    return _OptionFailed(CliRejectionKind.missingValue);
+    return _OptionFailed(
+      CliRejectionKind.missingValue,
+      route: _deadEndRouteOf(node),
+      message: 'missing value for ${_describeOption(spec)}',
+    );
   }
   if (_peekIsLiteralChild(node, argv, i + 2)) {
-    return _OptionFailed(CliRejectionKind.misplacedOption);
+    final reached = _lookAheadRoute(node, argv.sublist(i + 2));
+    return _OptionFailed(
+      CliRejectionKind.misplacedOption,
+      route: reached,
+      message: _misplacedAheadMessage(spec, reached),
+    );
   }
   return _OptionRead(
     ParsedOption(
@@ -455,3 +554,13 @@ _OptionOutcome _readOption({
     i + 2,
   );
 }
+
+/// Message for a `misplacedOption` rejection where a route was found by
+/// looking ahead past the option (spec 8.2 rule a): names it when the
+/// lookahead is conclusive, otherwise states the general rule.
+String _misplacedAheadMessage(OptionSpec spec, CliRoute? reached) =>
+    reached != null
+    ? 'options go before the program: ${_describeOption(spec)} belongs '
+          "after '${reached.pattern}'"
+    : 'options go before the program: ${_describeOption(spec)} was read '
+          'before the route';

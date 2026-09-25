@@ -19,7 +19,7 @@ part 'trie.dart';
 /// Every behavior-changing registration detail is a required named
 /// parameter: the router applies no defaults and guesses nothing.
 class CliRouter {
-  CliRouter({List<OptionSpec> globalOptions = const []})
+  CliRouter({required List<OptionSpec> globalOptions})
     : _globalOptions = globalOptions {
     _validateOptionScope(globalOptions, false, const []);
   }
@@ -168,14 +168,6 @@ class CliRouter {
     var afterDoubleDash = false;
     var i = 0;
 
-    List<OptionSpec> scopeAt(_TrieNode n) {
-      final r = n.ownRoute ?? _deterministicRoute(n);
-      if (r == null) return _globalOptions;
-      return r.route.globals
-          ? [...r.route.options, ..._globalOptions]
-          : r.route.options;
-    }
-
     CliRejection reject(
       CliRejectionKind kind, {
       CliRoute? route,
@@ -188,6 +180,28 @@ class CliRouter {
         route: route,
         message: message,
       );
+    }
+
+    // Once a specific route is known, every option read so far (readable,
+    // until now, only through the wider exploratory scope of `_scopeAt`)
+    // must actually be accepted by that route's own exact scope: its own
+    // options, plus globals only when it accepts them (spec 8.2: "option in
+    // scope but not accepted by the resolved route: unknownOption, naming
+    // the route"). Reports the first violation, in read order.
+    CliRejection? optionsMismatch(CliRoute route) {
+      final finalScope = _routeScope(route, _globalOptions);
+      for (final parsed in parsedOptions) {
+        if (!finalScope.contains(parsed.spec)) {
+          return reject(
+            CliRejectionKind.unknownOption,
+            route: route,
+            message:
+                '${_describeOption(parsed.spec)} is not accepted by '
+                "'${route.pattern}'",
+          );
+        }
+      }
+      return null;
     }
 
     CliOutcome finishHere() {
@@ -204,13 +218,15 @@ class CliRouter {
           message: 'incomplete command',
         );
       }
-      final scope = scopeAt(node);
-      for (final spec in scope) {
+      final mismatch = optionsMismatch(r.route);
+      if (mismatch != null) return mismatch;
+      final finalScope = _routeScope(r.route, _globalOptions);
+      for (final spec in finalScope) {
         if (spec.required && !consumedSpecs.contains(spec)) {
           return reject(
             CliRejectionKind.missingRequiredOption,
             route: r.route,
-            message: "missing required option '--${spec.name}'",
+            message: 'missing required option ${_describeOption(spec)}',
           );
         }
       }
@@ -242,7 +258,7 @@ class CliRouter {
           token: token,
           node: node,
           operandStarted: operandStarted,
-          scope: scopeAt(node),
+          scope: _scopeAt(node, _globalOptions),
           allRoutes: _flatRoutes,
           globalOptions: _globalOptions,
         );
@@ -251,7 +267,8 @@ class CliRouter {
           if (!parsed.spec.repeatable && consumedSpecs.contains(parsed.spec)) {
             return reject(
               CliRejectionKind.repeatedOption,
-              message: "option '--${parsed.spec.name}' cannot be repeated",
+              route: _deadEndRouteOf(node),
+              message: '${_describeOption(parsed.spec)} was already given',
             );
           }
           parsedOptions.add(parsed);
@@ -260,7 +277,7 @@ class CliRouter {
           continue;
         }
         final failed = outcome as _OptionFailed;
-        return reject(failed.kind, route: failed.route);
+        return reject(failed.kind, route: failed.route, message: failed.message);
       }
 
       if (!afterDoubleDash) {
@@ -303,6 +320,8 @@ class CliRouter {
       }
 
       if (node.ownRoute != null) {
+        final mismatch = optionsMismatch(node.ownRoute!.route);
+        if (mismatch != null) return mismatch;
         return reject(
           CliRejectionKind.extraArgument,
           route: node.ownRoute!.route,

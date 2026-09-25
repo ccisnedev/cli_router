@@ -10,7 +10,7 @@ final activeOption = OptionSpec.flag('active', repeatable: false);
 final adminOption = OptionSpec.flag('admin', abbr: 'a', repeatable: false);
 
 CliRouter buildUsersModule() {
-  final r = CliRouter();
+  final r = CliRouter(globalOptions: const []);
 
   r.cmd(
     'list',

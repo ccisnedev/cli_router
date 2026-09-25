@@ -25,8 +25,9 @@ resolution model, not an incremental change.
 - `looksLikeOption(String)`: the single public predicate for "is this token
   option shaped" (`-`+letter, `--`+letter, or exactly `--`). Negative numbers
   and anything else are operands, never options.
-- `CliRouter({List<OptionSpec> globalOptions = const []})`: options that
-  apply to every route that opts in with `globals: true`.
+- `CliRouter({required List<OptionSpec> globalOptions})`: options that apply
+  to every route that opts in with `globals: true`. Required, no default:
+  pass `const []` for a router with no globals.
 - `CliRouter.cmd(pattern, handler, {required options, required globals,
   description})`: `options` and `globals` are now required, named, and
   declared per route, not inferred. `pattern` supports required `<name>`
@@ -53,6 +54,19 @@ resolution model, not an incremental change.
   `--help`, even at a node that has not resolved to a route of its own yet
   (e.g. `eval --help` on a router with `eval rpn`/`eval infix` reports
   `incomplete` carrying `[help]`).
+- Every `CliRejection` carries a non-null, human readable `message`, and a
+  non-null `route` whenever the route is already unambiguously resolved at
+  rejection time (every literal segment leading to it consumed, no
+  continuation left).
+- `CliRejectionKind.unknownOption` now also covers an option that is in
+  scope while still resolving (offered by some route reachable ahead) but
+  is not actually declared by the specific route the invocation resolves
+  to, e.g. a global option on a route with `globals: false`, or a route
+  option declared by a sibling route (spec 8.2: "option in scope but not
+  accepted by the resolved route: `unknownOption`, naming the route").
+  Checked once resolution lands on a route (on a successful resolution and
+  on `extraArgument`), against every option parsed since the start of the
+  invocation.
 - `CliRouter.run(args, {required onReject, stdout, stderr})`: the I/O entry
   point built on `resolve`. `onReject` is required at the call site; there
   is no silent default reporting.
@@ -73,6 +87,14 @@ resolution model, not an incremental change.
 - A required option absent at the end of the invocation is
   `missingRequiredOption`, decided only once every option on the invocation
   has been read.
+- The option scope at a node not yet resolved to a route (spec 8.2) is now
+  the globals plus the options of *every* route reachable from that node
+  through required parameters only, not just one deterministic route. A
+  node with both a literal child and a param child (e.g. a root that has
+  its own route and a parameter shortcut, like `''` and `<program>`) offers
+  the union, so an option belonging only to the parameter route is still
+  readable there; whether it is actually accepted is still decided by the
+  specific route resolution lands on (see `unknownOption` above).
 
 ### Removed
 - `CliRequest.flags` (the lossy, string-keyed flag map) and the
@@ -87,6 +109,10 @@ resolution model, not an incremental change.
   meaning.
 - `CliRouter.printHelp`. Help formatting is an application (or `modular_cli_sdk`) concern; the router only exposes `listCommands()`.
 - `cmd(pattern, router)` as sugar for mounting a subrouter. Use `mount`.
+- `ListedCommand.module`. It was always `null`: mount flattening threads the
+  mount prefix into the route's own `pattern` (`commands show <name>`), it
+  never tracked the mount name separately. Use `reservedWords` to check
+  whether a word is already a mount prefix.
 
 ## [0.1.1] - 2026-09-23
 

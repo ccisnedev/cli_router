@@ -109,7 +109,7 @@ void main() {
     });
 
     test('present required option succeeds instead of rejecting', () {
-      final router = CliRouter();
+      final router = CliRouter(globalOptions: const []);
       router.cmd(
         'push',
         (req) async => 0,

@@ -13,7 +13,7 @@ void main() {
       'a successful resolution invokes the route handler with a request',
       () async {
         CliRequest? captured;
-        final router = CliRouter();
+        final router = CliRouter(globalOptions: const []);
         router.cmd(
           'greet <name>',
           (req) async {
@@ -42,7 +42,7 @@ void main() {
 
     test('CliRequest.param returns null for an unbound name', () async {
       CliRequest? captured;
-      final router = CliRouter();
+      final router = CliRouter(globalOptions: const []);
       router.cmd(
         'greet <name>',
         (req) async {
@@ -60,7 +60,7 @@ void main() {
       'CliRequest.option returns null when the option was not read',
       () async {
         CliRequest? captured;
-        final router = CliRouter();
+        final router = CliRouter(globalOptions: const []);
         router.cmd(
           'build',
           (req) async {
@@ -77,7 +77,7 @@ void main() {
 
     test('a wildcard route exposes leftover operands via rest', () async {
       CliRequest? captured;
-      final router = CliRouter();
+      final router = CliRouter(globalOptions: const []);
       router.cmd(
         'run *',
         (req) async {
@@ -109,7 +109,7 @@ void main() {
         // use a router without one to force a rejection instead.
         expect(code, isNot(equals(77)));
 
-        final noShortcut = CliRouter();
+        final noShortcut = CliRouter(globalOptions: const []);
         noShortcut.cmd(
           'version',
           (req) async => 0,
@@ -130,7 +130,7 @@ void main() {
     );
 
     test('onReject can be synchronous-returning (FutureOr<int>)', () async {
-      final router = CliRouter();
+      final router = CliRouter(globalOptions: const []);
       router.cmd(
         'version',
         (req) async => 0,
@@ -147,7 +147,7 @@ void main() {
       'the request shape exposes only route, params, rest, options',
       () async {
         CliRequest? captured;
-        final router = CliRouter();
+        final router = CliRouter(globalOptions: const []);
         router.cmd(
           'ping',
           (req) async {
