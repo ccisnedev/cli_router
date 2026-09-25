@@ -74,6 +74,30 @@ void main() {
         equals(CliRejectionKind.unknownOption),
       );
     });
+
+    test("'--' rules out a still-pending literal route word just like an "
+        "operand does, so help loses to an option error once only one "
+        "route remains reachable: run --help -- is unknownOption naming "
+        "'run <x>', not missingArgument", () {
+      final helpOpt = OptionSpec.flag('help', abbr: 'h', repeatable: false);
+      final router = CliRouter(globalOptions: [helpOpt]);
+      router.cmd(
+        'run <x>',
+        (req) async => 0,
+        options: const [],
+        globals: false,
+      );
+      router.cmd('run sub', (req) async => 0, options: const [], globals: true);
+
+      final outcome = router.resolve(['run', '--help', '--']);
+
+      expect(outcome, isA<CliRejection>());
+      final rejection = outcome as CliRejection;
+      expect(rejection.kind, equals(CliRejectionKind.unknownOption));
+      expect(rejection.route?.pattern, equals('run <x>'));
+      expect(rejection.options, hasLength(1));
+      expect(rejection.options.single.spec.name, equals('help'));
+    });
   });
 
   group('missingRequiredOption is decided only after every option is read', () {
