@@ -198,10 +198,16 @@ class CliRouter {
   List<String> get reservedWords => _root.literalChildren.keys.toList();
 
   /// Every registered route, mounts flattened in.
+  ///
+  /// [ListedCommand.command] is built from the route's full segments
+  /// (`r.segments`), not from `r.route.pattern`: [CliRoute.pattern] is
+  /// deliberately public-facing and excludes a trailing `[<name>]` or `*`
+  /// (see its own dartdoc), but a caller listing commands needs the whole
+  /// registered pattern, that trailing segment included.
   List<ListedCommand> listCommands() => [
     for (final r in _flatRoutes)
       ListedCommand(
-        r.route.pattern,
+        _segsToPatternString(r.segments),
         r.route.description,
         positionals: r.route.positionals,
       ),
@@ -389,15 +395,31 @@ class CliRouter {
       }
 
       if (node.paramChild != null) {
-        params[node.paramName!] = token;
-        final next = node.paramChild!;
-        i++;
-        node = next;
-        // Grammar G forbids a literal after a parameter, so a node reached
-        // through a required parameter can never have a literal child of
-        // its own left to offer: consuming one always starts the operand.
-        operandStarted = true;
-        continue;
+        // A node can have both a parameter and a final wildcard (spec 8.1,
+        // see `_TrieNode`'s dartdoc for the precedence in full). The
+        // operand goes to the parameter by default; the wildcard takes
+        // over, as a single local decision with no backtracking, only when
+        // this is the last token on the invocation and the parameter's own
+        // target node cannot complete the route with nothing left over
+        // (its `ownRoute` is `null`, so it still needs at least one more
+        // token that will never come).
+        final paramTarget = node.paramChild!;
+        final isLastToken = i + 1 == argv.length;
+        final wildcardTakesOver =
+            node.wildcardRoute != null &&
+            isLastToken &&
+            paramTarget.ownRoute == null;
+        if (!wildcardTakesOver) {
+          params[node.paramName!] = token;
+          i++;
+          node = paramTarget;
+          // Grammar G forbids a literal after a parameter, so a node
+          // reached through a required parameter can never have a literal
+          // child of its own left to offer: consuming one always starts
+          // the operand.
+          operandStarted = true;
+          continue;
+        }
       }
 
       if (node.optionalParamRoute != null && !optionalParamConsumed) {
@@ -415,6 +437,22 @@ class CliRouter {
         continue;
       }
 
+      // The root, checked before its own route: reaching here with `node`
+      // still `_root` means no literal or parameter transition has
+      // happened yet (the trie has no edge back to the root, so this can
+      // only be the very first unresolved token). A route the root itself
+      // owns directly (an empty `''` pattern) only ever matches an
+      // invocation with zero operands, at `finishHere()`; it was never
+      // actually resolved to here, so this token cannot be extraArgument
+      // against it. Per issue #6: "unknownCommand: root, the word is no
+      // route and the root has no parameter" applies before the root
+      // route counts as resolved.
+      if (identical(node, _root)) {
+        return reject(
+          CliRejectionKind.unknownCommand,
+          message: "unknown command '$token'",
+        );
+      }
       if (node.ownRoute != null) {
         final mismatch = optionsMismatch(node.ownRoute!.route);
         if (mismatch != null) return mismatch;
@@ -422,12 +460,6 @@ class CliRouter {
           CliRejectionKind.extraArgument,
           route: node.ownRoute!.route,
           message: "unexpected argument '$token'",
-        );
-      }
-      if (identical(node, _root)) {
-        return reject(
-          CliRejectionKind.unknownCommand,
-          message: "unknown command '$token'",
         );
       }
       return reject(

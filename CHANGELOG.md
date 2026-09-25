@@ -208,6 +208,32 @@ resolution model, not an incremental change.
   order. When the subtree's own declarations disagree on the shape, the
   option is still `misplacedOption`, with `route: null` and every
   candidate listed, rather than guessing one of their shapes.
+- An unrecognized first token now reports `unknownCommand`, not
+  `extraArgument`, even when the root itself already owns a route (a
+  `''` pattern): that route only ever matches an invocation with zero
+  operands and was never actually resolved to for a nonempty first token,
+  so naming it in an `extraArgument` rejection was wrong.
+  `extraArgument` still applies once an operand has actually been bound.
+- A node may now register both a required parameter and a trailing `*`
+  wildcard (e.g. `run <arg>` and `run *`); they are no longer a
+  build-time `StateError`, in either registration order. At resolution
+  time the operand goes to the parameter by default; the wildcard takes
+  over, as a single local decision with no backtracking, only when this
+  is the last token on the invocation and the parameter's own target node
+  cannot complete the route with nothing left over. See `_TrieNode`'s
+  dartdoc for the precedence in full.
+- A `misplacedOption` message now names the option by the declaration
+  reachable from the current subtree, never by an unrelated route's
+  declaration that `_findAnyDeclaration`'s router-wide search happened to
+  find first (e.g. registering `other` with `--archive`/`-x` before
+  `group a` with `--execute`/`-x` no longer makes `group -x a` describe
+  `-x` as `--archive`). When the reachable declarations disagree in
+  shape, the message falls back to the spelling the user typed.
+- `listCommands()` now builds `ListedCommand.command` from a route's full
+  registered segments, trailing optional parameter or wildcard included
+  (`run *` now lists as `run *`, `help [<topic>]` as `help [<topic>]`),
+  instead of `CliRoute.pattern`, which deliberately omits that trailing
+  segment.
 
 ### Removed
 - `CliRequest.flags` (the lossy, string-keyed flag map) and the

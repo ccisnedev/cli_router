@@ -114,6 +114,28 @@ class _RegisteredRoute {
   final List<_Seg> segments;
 }
 
+/// One position in the routing trie.
+///
+/// Per issue #6 section 1, a node holds at most one literal child per
+/// word, at most one [paramChild] (a required parameter, which continues
+/// into a further subtree), and at most one [wildcardRoute] (a final `*`,
+/// always terminal). A [paramChild] and a [wildcardRoute] may coexist on
+/// the same node: they are not a conflict, only a precedence to resolve at
+/// match time (spec 8.1: "a literal child wins ... then the parameter,
+/// then the wildcard, else reject").
+///
+/// That precedence is a single local decision, made once, with no
+/// backtracking: given a token at a node with both, the token is bound to
+/// [paramChild] by default. The wildcard takes over instead only when
+/// [paramChild]'s own target node cannot, by itself, complete the route
+/// with nothing left over, and this is the last token on the invocation
+/// (the target node's `ownRoute` is `null`, so the parameter's subtree
+/// still needs at least one more token that will never come). Once the
+/// decision is made for a token, it is never revisited: a later token that
+/// the chosen branch cannot accept fails there (`extraArgument` or
+/// `missingArgument`), rather than reopening the choice and trying the
+/// wildcard instead. See the `paramChild != null` branch in
+/// `CliRouter.resolve` for the implementation.
 class _TrieNode {
   final Map<String, _TrieNode> literalChildren = {};
   _TrieNode? paramChild;
@@ -225,10 +247,18 @@ void _insertSegments(_TrieNode root, List<_Seg> segs, _RegisteredRoute reg) {
       case _SegKind.literal:
         node = node.literalChildren.putIfAbsent(seg.text!, () => _TrieNode());
       case _SegKind.requiredParam:
-        if (node.optionalParamRoute != null || node.wildcardRoute != null) {
+        // A wildcard already registered at this position is not a
+        // conflict: per issue #6 section 1, a node may hold both a
+        // parameter and a final wildcard at once, with precedence, not
+        // exclusivity, deciding between them at resolution time (see
+        // `_TrieNode.wildcardRoute`). An optional parameter, though, is
+        // itself a route terminal at this exact position, the same as a
+        // plain route would be, so it still conflicts with a required
+        // parameter continuing past it.
+        if (node.optionalParamRoute != null) {
           throw StateError(
             "a required parameter cannot follow an already registered "
-            'optional parameter or wildcard at this position',
+            'optional parameter at this position',
           );
         }
         if (node.paramChild == null) {
@@ -256,12 +286,9 @@ void _insertSegments(_TrieNode root, List<_Seg> segs, _RegisteredRoute reg) {
         node.optionalParamRoute = reg;
         return;
       case _SegKind.wildcard:
-        if (node.paramChild != null) {
-          throw StateError(
-            'a wildcard cannot coexist with a required parameter at the '
-            'same position',
-          );
-        }
+        // A required parameter already registered at this position (a
+        // `paramChild`) is not a conflict: see the matching comment in the
+        // `requiredParam` case above.
         if (node.route != null ||
             node.optionalParamRoute != null ||
             node.wildcardRoute != null) {
@@ -661,13 +688,25 @@ _OptionOutcome _readOption({
     }
     // shapesDiffer implies at least two candidates disagree, so `single`
     // is left null: still misplacedOption, with every candidate listed.
+    //
+    // The label in the message must come from the reachable declaration
+    // (`subtreeShape`), never from `declared`: `declared` is only used
+    // above to tell unknownOption from misplacedOption, and
+    // `_findAnyDeclaration`'s router-wide search can land on an unrelated
+    // route that happens to declare the same name or abbreviation with a
+    // different shape (spec 8.2 permits that on unrelated branches). Using
+    // it here would describe the option by a declaration this invocation
+    // can never reach. When the reachable declarations disagree
+    // (`shapesDiffer`), there is no single reachable shape to describe it
+    // by either, so the label falls back to the spelling the user typed.
+    final optionLabel = !shapesDiffer ? _describeOption(subtreeShape!) : label;
     return _OptionFailed(
       CliRejectionKind.misplacedOption,
       route: single,
       message: single != null
-          ? 'options go before the program: ${_describeOption(declared)} '
+          ? 'options go before the program: $optionLabel '
                 "belongs to '${single.pattern}'"
-          : 'options go before the program: ${_describeOption(declared)} '
+          : 'options go before the program: $optionLabel '
                 'belongs to one of: '
                 '${candidates.map((r) => "'${r.pattern}'").join(', ')}',
     );
