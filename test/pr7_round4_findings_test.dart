@@ -49,8 +49,10 @@ void main() {
   });
 
   group('2: a node may have both a required parameter and a final wildcard '
-      '(spec 8.1); the operand goes to the parameter unless the parameter '
-      'cannot consume it locally, in which case the wildcard takes over', () {
+      '(spec 8.1); an operand token always goes to the parameter, '
+      'unconditionally, with no last-token exception and no lookahead into '
+      "the parameter's own subtree (round 5). The wildcard is reached only "
+      'when argv ends exactly at the node and it has no route of its own', () {
     test('run <arg> and run * coexist; a single operand resolves through '
         'the parameter', () {
       final router = CliRouter(globalOptions: const []);
@@ -70,9 +72,9 @@ void main() {
       expect(resolution.params, equals({'arg': 'x'}));
     });
 
-    test('the wildcard takes over when a single remaining token is not '
-        'enough for the parameter chain to complete: run <a> <b> and '
-        "run *, 'run x' resolves through the wildcard", () {
+    test('(round 5) an operand token always goes to the parameter, even '
+        'when it alone cannot complete the parameter chain: run <a> <b> '
+        "and run *, 'run x' is missingArgument for <b>, not the wildcard", () {
       final router = CliRouter(globalOptions: const []);
       router.cmd(
         'run <a> <b>',
@@ -82,13 +84,32 @@ void main() {
       );
       router.cmd('run *', (req) async => 0, options: const [], globals: false);
 
-      final outcome = router.resolve(['run', 'x']);
+      final rejection = _rejected(router, ['run', 'x']);
+
+      expect(rejection.kind, equals(CliRejectionKind.missingArgument));
+      expect(rejection.message, contains('<b>'));
+    });
+
+    test('(round 5) the wildcard is reached only when argv ends exactly at '
+        'the node with no operand left to give the parameter: run <arg> '
+        "and run *, 'run' alone resolves through the wildcard with zero "
+        'operands', () {
+      final router = CliRouter(globalOptions: const []);
+      router.cmd(
+        'run <arg>',
+        (req) async => 0,
+        options: const [],
+        globals: false,
+      );
+      router.cmd('run *', (req) async => 0, options: const [], globals: false);
+
+      final outcome = router.resolve(['run']);
 
       expect(outcome, isA<CliResolution>());
       final resolution = outcome as CliResolution;
       expect(resolution.route.pattern, equals('run'));
       expect(resolution.route.hasWildcard, isTrue);
-      expect(resolution.rest, equals(['x']));
+      expect(resolution.rest, equals(<String>[]));
     });
 
     test('enough tokens for the full parameter chain still resolve through '
