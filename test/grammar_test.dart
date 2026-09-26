@@ -184,6 +184,46 @@ void main() {
       expect(outcome, isA<CliResolution>());
       expect((outcome as CliResolution).options, hasLength(2));
     });
+
+    test('a repeatable option keeps every occurrence losslessly, in argv '
+        'order, with its spelling, index, value and attachment', () {
+      final define = OptionSpec.value(
+        'define',
+        abbr: 'd',
+        required: false,
+        repeatable: true,
+      );
+      final router = CliRouter(globalOptions: const []);
+      router.cmd('build', (req) async => 0, options: [define], globals: false);
+
+      final argv = [
+        'build',
+        '--define=a',
+        '-d',
+        'b',
+        '--define',
+        'a',
+        '--define=',
+      ];
+      final outcome = router.resolve(argv);
+
+      expect(outcome, isA<CliResolution>());
+      final occurrences = (outcome as CliResolution).options;
+      for (final o in occurrences) {
+        expect(o.written, equals(argv[o.argvIndex]));
+      }
+      expect(
+        occurrences
+            .map((o) => (o.spec, o.written, o.argvIndex, o.value, o.attached))
+            .toList(),
+        equals([
+          (define, '--define=a', 1, 'a', true),
+          (define, '-d', 2, 'b', false),
+          (define, '--define', 4, 'a', false),
+          (define, '--define=', 6, '', true),
+        ]),
+      );
+    });
   });
 
   group('unknown and required options', () {

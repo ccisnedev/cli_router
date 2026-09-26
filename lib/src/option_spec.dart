@@ -127,9 +127,10 @@ class ParsedOption {
   /// The declared option this occurrence matched.
   final OptionSpec spec;
 
-  /// The exact token that introduced this option, as written on argv, e.g.
-  /// `--file` or `-f` (never includes the value token, even when the value
-  /// came from a separate argv slot).
+  /// The exact argv token that introduced this option, always equal to
+  /// `argv[argvIndex]`: `--file` or `-f` when the value came from the next
+  /// argv slot (that value token is never included), and `--file=x` when the
+  /// value was attached with `=`.
   final String written;
 
   /// Index into the original argv of the token in [written].

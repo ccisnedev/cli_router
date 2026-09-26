@@ -126,9 +126,16 @@ dart run bin/main.dart module use-case --dry-run --threads 4 1234
   segment, captures the next token if there is one.
 - **A trailing wildcard**: `*`, only as the very last segment, captures every
   remaining operand into `CliRequest.rest`.
-- A route's own required `<name>` continuation cannot coexist with a
-  `[<name>]` or `*` at the same position, and a `[<name>]`/`*` must be the
-  last segment: both are build-time (registration) errors.
+- A `[<name>]` or `*` must be the last segment, and a route's own required
+  `<name>` continuation cannot coexist with a `[<name>]` at the same
+  position: both are build-time (registration) errors.
+- A required `<name>` and a `*` may coexist at the same position
+  (`run <arg>` and `run *`). An operand token there always goes to the
+  parameter, even when it alone cannot complete the parameter chain. The
+  wildcard is reached only when argv ends at that node, so `run` alone
+  resolves through `run *` with zero operands. The choice is local, with no
+  backtracking: with `run <a> <b>` and `run *`, `run x y z` is an
+  `extraArgument` against `run <a> <b>`, not a wildcard match.
 - **A literal word can never follow a parameter, the optional parameter, or
   the wildcard**: route words are grammar, parameters and the wildcard are
   operands, and operands come last. `'show <id> details'` is a build-time
