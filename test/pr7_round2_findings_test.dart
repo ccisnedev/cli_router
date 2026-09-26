@@ -184,9 +184,15 @@ void main() {
         reason: 'got route ${rejection.route?.pattern}',
       );
       if (rejection.route == null) {
-        expect(rejection.message, contains('eval rpn'));
-        expect(rejection.message, contains('eval infix'));
+        expect(
+          rejection.candidates.map((r) => r.pattern),
+          unorderedEquals(['eval rpn', 'eval infix']),
+        );
       }
+      // eval rpn and eval infix declare the exact same fileOpt shape, so
+      // the router can still name it even though it cannot name a single
+      // route.
+      expect(rejection.option, equals(fileOpt));
     });
 
     test('--file p: misplacedOption with both eval rpn and eval infix as '
@@ -197,8 +203,11 @@ void main() {
 
       expect(rejection.kind, equals(CliRejectionKind.misplacedOption));
       expect(rejection.route, isNull);
-      expect(rejection.message, contains('eval rpn'));
-      expect(rejection.message, contains('eval infix'));
+      expect(
+        rejection.candidates.map((r) => r.pattern),
+        unorderedEquals(['eval rpn', 'eval infix']),
+      );
+      expect(rejection.option, equals(fileOpt));
     });
 
     test('--bogus eval rpn: unknownOption, since no route anywhere '

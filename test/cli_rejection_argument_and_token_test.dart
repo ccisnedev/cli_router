@@ -190,12 +190,28 @@ void main() {
   });
 
   group('repeatedOption: token is the repeated occurrence, not the first', () {
-    test('cx eval rpn -f a.rpn -f b.rpn', () {
+    // Both occurrences must be spelled differently, otherwise the token
+    // value alone cannot distinguish the first occurrence from the second:
+    // '-f' twice would pass whether the router reported the first '-f' or
+    // the second one by mistake.
+    test('cx eval rpn -f a.rpn --file=b.rpn: short then long', () {
       final rejection = _rejected(buildCalculatrixRouter(), [
         'eval',
         'rpn',
         '-f',
         'a.rpn',
+        '--file=b.rpn',
+      ]);
+      expect(rejection.kind, equals(CliRejectionKind.repeatedOption));
+      expect(rejection.token, equals('--file=b.rpn'));
+      expect(rejection.argument, isNull);
+    });
+
+    test('cx eval rpn --file=a.rpn -f b.rpn: long then short', () {
+      final rejection = _rejected(buildCalculatrixRouter(), [
+        'eval',
+        'rpn',
+        '--file=a.rpn',
         '-f',
         'b.rpn',
       ]);

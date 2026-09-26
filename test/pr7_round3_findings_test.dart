@@ -80,6 +80,8 @@ void main() {
 
       expect(rejection.kind, equals(CliRejectionKind.misplacedOption));
       expect(rejection.route?.pattern, equals('group a'));
+      expect(rejection.option, equals(flagX()));
+      expect(rejection.candidates, isEmpty);
     });
 
     test('same routers, "other" registered last instead: the result does '
@@ -100,6 +102,8 @@ void main() {
 
       expect(rejection.kind, equals(CliRejectionKind.misplacedOption));
       expect(rejection.route?.pattern, equals('group a'));
+      expect(rejection.option, equals(flagX()));
+      expect(rejection.candidates, isEmpty);
     });
 
     test('when the reachable shapes in the subtree genuinely differ, the '
@@ -113,8 +117,13 @@ void main() {
 
       expect(rejection.kind, equals(CliRejectionKind.misplacedOption));
       expect(rejection.route, isNull);
-      expect(rejection.message, contains("'a'"));
-      expect(rejection.message, contains("'b'"));
+      expect(
+        rejection.candidates.map((r) => r.pattern),
+        unorderedEquals(['a', 'b']),
+      );
+      // The reachable shapes disagree (flagX vs valueX), so no single
+      // shape can be honestly reported.
+      expect(rejection.option, isNull);
     });
   });
 }
