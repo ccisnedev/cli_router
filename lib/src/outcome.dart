@@ -68,22 +68,31 @@ enum CliRejectionKind {
   ///
   /// [CliRejection.option] is non-null only when the router can name the
   /// one declared [OptionSpec] the token matches: reading an already known
-  /// option immediately ahead of a literal route word, or a token every
-  /// route still reachable from here declares with the very same shape. It
-  /// is null for a `--` that follows an operand (not an option at all),
-  /// for an option read after an operand has already started (its
-  /// declaration is not looked up before the rejection fires, regardless
-  /// of whether the token happens to be declared somewhere), and when
-  /// several routes still reachable from here declare the token with
-  /// genuinely different shapes (no single shape can be reported).
+  /// option immediately ahead of a literal route word, or every route
+  /// still reachable from here declaring the token with the very same
+  /// shape (even when more than one such route remains reachable: they
+  /// all agree, so the shared shape can still be named). It is null for a
+  /// `--` that follows an operand (not an option at all), for an option
+  /// read after an operand has already started (its declaration is not
+  /// looked up before the rejection fires, regardless of whether the
+  /// token happens to be declared somewhere), and when several routes
+  /// still reachable from here declare the token with genuinely different
+  /// shapes (no single shape can be reported).
   ///
-  /// [CliRejection.candidates] is non-empty only for that last situation:
-  /// every route still reachable from here that declares the token,
-  /// whether or not their shapes agree, in trie declaration order. It is
-  /// empty for every other cause of misplacedOption, including when
-  /// exactly one candidate was found (then [CliRejection.route] already
-  /// names it and [CliRejection.option] already names its shape, so the
-  /// list would be redundant).
+  /// [CliRejection.candidates] tracks route ambiguity, and is populated
+  /// independently of whether [CliRejection.option] is null: it is
+  /// non-empty whenever more than one route is still reachable from here
+  /// and no single one of them can be identified as the route this
+  /// rejection belongs to, every such route, in trie declaration order,
+  /// whether or not their option shapes agree. That covers both the
+  /// shapes-agree situation just above ([CliRejection.option] is then
+  /// non-null: the shared shape) and the genuinely-differing-shapes
+  /// situation ([CliRejection.option] is then null). It is empty for
+  /// every other cause of misplacedOption, including when exactly one
+  /// candidate was found or a lookahead singled one out (then
+  /// [CliRejection.route] already names it and [CliRejection.option],
+  /// when matched, already names its shape, so the list would be
+  /// redundant).
   misplacedOption,
 
   /// A value option has no value: it is the last token, or the next token is
@@ -278,11 +287,14 @@ class CliRejection extends CliOutcome {
   /// guarantee.
   final OptionSpec? option;
 
-  /// Every route still reachable from here that declares the ambiguous
-  /// option this rejection implicates, in trie declaration order. Empty
-  /// (never null) whenever a kind or situation does not populate it. See
-  /// the per-kind doc comments on [CliRejectionKind] for the exact
-  /// guarantee; today only [CliRejectionKind.misplacedOption]'s
+  /// Every route still reachable from here whenever no single declaring
+  /// route can be identified, in trie declaration order. This tracks
+  /// route ambiguity on its own, independently of [option]: it is
+  /// populated whether the candidates' option shapes agree (then [option]
+  /// also names their shared shape) or genuinely differ (then [option] is
+  /// null). Empty (never null) whenever a kind or situation does not
+  /// populate it. See the per-kind doc comments on [CliRejectionKind] for
+  /// the exact guarantee; today only [CliRejectionKind.misplacedOption]'s
   /// genuinely-ambiguous-subtree situation ever populates this.
   final List<CliRoute> candidates;
 
