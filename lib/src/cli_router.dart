@@ -232,6 +232,8 @@ class CliRouter {
       CliRejectionKind kind, {
       CliRoute? route,
       String? message,
+      String? argument,
+      String? token,
     }) {
       return CliRejection(
         kind: kind,
@@ -239,6 +241,8 @@ class CliRouter {
         options: List.unmodifiable(parsedOptions),
         route: route,
         message: message,
+        argument: argument,
+        token: token,
       );
     }
 
@@ -258,6 +262,7 @@ class CliRouter {
             message:
                 '${_describeOption(parsed.spec)} is not accepted by '
                 "'${route.pattern}'",
+            token: parsed.written,
           );
         }
       }
@@ -291,6 +296,7 @@ class CliRouter {
           return reject(
             CliRejectionKind.missingArgument,
             message: 'missing a value for <${node.paramName}>',
+            argument: node.paramName,
           );
         }
         return reject(
@@ -338,6 +344,7 @@ class CliRouter {
             CliRejectionKind.misplacedOption,
             route: _resolvedRouteOf(node, committed: operandStarted),
             message: "'--' goes before the program",
+            token: token,
           );
         }
         afterDoubleDash = true;
@@ -363,6 +370,7 @@ class CliRouter {
               CliRejectionKind.repeatedOption,
               route: _resolvedRouteOf(node, committed: operandStarted),
               message: '${_describeOption(parsed.spec)} was already given',
+              token: parsed.written,
             );
           }
           parsedOptions.add(parsed);
@@ -375,6 +383,7 @@ class CliRouter {
           failed.kind,
           route: failed.route,
           message: failed.message,
+          token: failed.token,
         );
       }
 
@@ -451,6 +460,7 @@ class CliRouter {
         return reject(
           CliRejectionKind.unknownCommand,
           message: "unknown command '$token'",
+          token: token,
         );
       }
       if (node.ownRoute != null) {
@@ -460,11 +470,13 @@ class CliRouter {
           CliRejectionKind.extraArgument,
           route: node.ownRoute!.route,
           message: "unexpected argument '$token'",
+          token: token,
         );
       }
       return reject(
         CliRejectionKind.incomplete,
         message: "'$token' does not continue this command",
+        token: token,
       );
     }
   }

@@ -22,8 +22,15 @@ CliRejection _rejected(CliRouter router, List<String> args) {
 
 void main() {
   group('unknownCommand: token is the unmatched word, argument is null', () {
-    test('cx bogus', () {
-      final rejection = _rejected(buildCalculatrixRouter(), ['bogus']);
+    test('cx bogus: a router with no root parameter to absorb it', () {
+      final router = CliRouter(globalOptions: const []);
+      router.cmd(
+        'version',
+        (req) async => 0,
+        options: const [],
+        globals: false,
+      );
+      final rejection = _rejected(router, ['bogus']);
       expect(rejection.kind, equals(CliRejectionKind.unknownCommand));
       expect(rejection.token, equals('bogus'));
       expect(rejection.argument, isNull);

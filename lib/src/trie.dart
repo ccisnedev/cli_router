@@ -464,10 +464,11 @@ class _OptionRead extends _OptionOutcome {
 }
 
 class _OptionFailed extends _OptionOutcome {
-  _OptionFailed(this.kind, {this.route, this.message});
+  _OptionFailed(this.kind, {this.route, this.message, this.token});
   final CliRejectionKind kind;
   final CliRoute? route;
   final String? message;
+  final String? token;
 }
 
 OptionSpec? _findInScope(List<OptionSpec> scope, String identity, bool isLong) {
@@ -619,6 +620,7 @@ _OptionOutcome _readOption({
         CliRejectionKind.invalidShortOption,
         route: _resolvedRouteOf(node, committed: operandStarted),
         message: message,
+        token: token,
       );
     }
     identity = rest;
@@ -633,6 +635,7 @@ _OptionOutcome _readOption({
       message:
           'options go before the program: an option cannot follow an '
           'operand',
+      token: token,
     );
   }
 
@@ -651,6 +654,7 @@ _OptionOutcome _readOption({
         CliRejectionKind.unknownOption,
         route: _resolvedRouteOf(node, committed: operandStarted),
         message: "unknown option '$label'",
+        token: token,
       );
     }
     // Whether this is misplacedOption (some route still reachable from
@@ -669,6 +673,7 @@ _OptionOutcome _readOption({
         CliRejectionKind.unknownOption,
         route: _resolvedRouteOf(node, committed: operandStarted),
         message: "unknown option '$label'",
+        token: token,
       );
     }
     // The shape that actually governs how many tokens this option reads
@@ -734,6 +739,7 @@ _OptionOutcome _readOption({
           : 'options go before the program: $optionLabel '
                 'belongs to one of: '
                 '${candidates.map((r) => "'${r.pattern}'").join(', ')}',
+      token: token,
     );
   }
 
@@ -743,6 +749,7 @@ _OptionOutcome _readOption({
         CliRejectionKind.unexpectedValue,
         route: _resolvedRouteOf(node, committed: operandStarted),
         message: '${_describeOption(spec)} takes no value',
+        token: token,
       );
     }
     if (_peekIsLiteralChild(node, argv, i + 1)) {
@@ -751,6 +758,7 @@ _OptionOutcome _readOption({
         CliRejectionKind.misplacedOption,
         route: reached,
         message: _misplacedAheadMessage(spec, reached),
+        token: token,
       );
     }
     return _OptionRead(
@@ -772,6 +780,7 @@ _OptionOutcome _readOption({
         CliRejectionKind.misplacedOption,
         route: reached,
         message: _misplacedAheadMessage(spec, reached),
+        token: token,
       );
     }
     return _OptionRead(
@@ -794,6 +803,7 @@ _OptionOutcome _readOption({
       CliRejectionKind.missingValue,
       route: _resolvedRouteOf(node, committed: operandStarted),
       message: 'missing value for ${_describeOption(spec)}',
+      token: token,
     );
   }
   if (_peekIsLiteralChild(node, argv, i + 2)) {
@@ -802,6 +812,7 @@ _OptionOutcome _readOption({
       CliRejectionKind.misplacedOption,
       route: reached,
       message: _misplacedAheadMessage(spec, reached),
+      token: token,
     );
   }
   return _OptionRead(

@@ -105,6 +105,15 @@ resolution model, not an incremental change.
   non-null `route` whenever the route is already unambiguously resolved at
   rejection time (every literal segment leading to it consumed, no
   continuation left).
+- `CliRejection.argument` (the implicated positional's name) and
+  `CliRejection.token` (the offending argv token, exactly as written),
+  typed instead of parsed out of `message`. `argument` is non-null only for
+  `missingArgument`. `token` is non-null for every kind except
+  `missingArgument` and `missingRequiredOption` (always null for both) and
+  `incomplete` (non-null only when a specific token caused the rejection,
+  null when argv simply ran out at a node with no route and no pending
+  parameter). See the doc comments on `CliRejectionKind` for the exact
+  guarantee per kind.
 - `CliRejectionKind.unknownOption` now also covers an option that is in
   scope while still resolving (offered by some route reachable ahead) but
   is not actually declared by the specific route the invocation resolves
