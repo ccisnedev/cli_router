@@ -155,7 +155,7 @@ void main() {
       expect(rejection.option, equals(fileOpt));
       expect(
         rejection.candidates.map((r) => r.pattern),
-        unorderedEquals(['eval rpn', 'eval infix']),
+        orderedEquals(['eval rpn', 'eval infix']),
       );
     });
 
@@ -179,7 +179,7 @@ void main() {
       expect(rejection.option, isNull);
       expect(
         rejection.candidates.map((r) => r.pattern),
-        unorderedEquals(['a', 'b']),
+        orderedEquals(['a', 'b']),
       );
     });
   });
@@ -284,6 +284,60 @@ void main() {
       final rejection = _rejected(router, ['deploy']);
       expect(rejection.kind, equals(CliRejectionKind.missingRequiredOption));
       expect(rejection.route?.pattern, equals('deploy'));
+      expect(rejection.option, equals(targetOpt));
+      expect(rejection.candidates, isEmpty);
+    });
+
+    test('cx deploy with no --target and no --region: two missing '
+        'route-local required options, only the first in spec order '
+        '(declaration order in the options list) is reported', () {
+      final targetOpt = OptionSpec.value(
+        'target',
+        abbr: 't',
+        required: true,
+        repeatable: false,
+      );
+      final regionOpt = OptionSpec.value(
+        'region',
+        abbr: null,
+        required: true,
+        repeatable: false,
+      );
+      final router = CliRouter(globalOptions: const []);
+      router.cmd('deploy', (req) async => 0, options: [
+        targetOpt,
+        regionOpt,
+      ], globals: false);
+
+      final rejection = _rejected(router, ['deploy']);
+      expect(rejection.kind, equals(CliRejectionKind.missingRequiredOption));
+      expect(rejection.option, equals(targetOpt));
+      expect(rejection.candidates, isEmpty);
+    });
+
+    test('cx deploy with no --target and no --region: a missing route-local '
+        'required option and a missing required global, both unread; spec '
+        'order checks the route\'s own options before the globals it '
+        'accepts, so the local one is reported', () {
+      final targetOpt = OptionSpec.value(
+        'target',
+        abbr: 't',
+        required: true,
+        repeatable: false,
+      );
+      final regionOpt = OptionSpec.value(
+        'region',
+        abbr: null,
+        required: true,
+        repeatable: false,
+      );
+      final router = CliRouter(globalOptions: [regionOpt]);
+      router.cmd('deploy', (req) async => 0, options: [
+        targetOpt,
+      ], globals: true);
+
+      final rejection = _rejected(router, ['deploy']);
+      expect(rejection.kind, equals(CliRejectionKind.missingRequiredOption));
       expect(rejection.option, equals(targetOpt));
       expect(rejection.candidates, isEmpty);
     });
