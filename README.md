@@ -21,7 +21,7 @@ upgrading from 0.1.x.
 - `cmd('route subroute <id>', handler, options: [...], globals: true)` to
   register commands. Every behavior-changing detail (the route's own
   options, whether the router's global options apply) is a required, named,
-  declared parameter — nothing is inferred or defaulted.
+  declared parameter. Nothing is inferred or defaulted.
 - `mount('prefix', subRouter)` to graft a subrouter under a single literal
   word, flattening transitively. The mounted router's own middleware (from
   its own `use()`) is preserved and runs inside the mounting router's,
@@ -40,8 +40,8 @@ upgrading from 0.1.x.
   with `abbr`, `required` and `repeatable` all explicit.
 - Lossless option parsing: every occurrence of every option is kept, in
   argv order, exactly as written.
-- `resolve(argv)` is pure — no I/O, never throws for a malformed
-  invocation — so it can be tested, or driven by something other than
+- `resolve(argv)` is pure: no I/O, and it never throws for a malformed
+  invocation. So it can be tested, or driven by something other than
   `run()`, without touching stdout/stderr/exit codes.
 - Eleven rejection kinds, precisely defined (see below). The router only
   classifies; deciding what to print and which exit code to use is left to
@@ -158,7 +158,7 @@ final fileOption = OptionSpec.value(
 ```
 
 - `OptionSpec.flag(name, {required abbr, required repeatable})`: present or
-  absent, never takes a value. A flag is never `required` — either it was
+  absent, never takes a value. A flag is never `required`: either it was
   read or it was not, there is no missing value to report.
 - `OptionSpec.value(name, {required abbr, required required, required
   repeatable})`: takes a value, via `--name value`, `--name=value`, or
