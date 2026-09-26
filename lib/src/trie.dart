@@ -464,11 +464,20 @@ class _OptionRead extends _OptionOutcome {
 }
 
 class _OptionFailed extends _OptionOutcome {
-  _OptionFailed(this.kind, {this.route, this.message, this.token});
+  _OptionFailed(
+    this.kind, {
+    this.route,
+    this.message,
+    this.token,
+    this.option,
+    this.candidates = const [],
+  });
   final CliRejectionKind kind;
   final CliRoute? route;
   final String? message;
   final String? token;
+  final OptionSpec? option;
+  final List<CliRoute> candidates;
 }
 
 OptionSpec? _findInScope(List<OptionSpec> scope, String identity, bool isLong) {
@@ -740,6 +749,11 @@ _OptionOutcome _readOption({
                 'belongs to one of: '
                 '${candidates.map((r) => "'${r.pattern}'").join(', ')}',
       token: token,
+      option: !shapesDiffer ? subtreeShape : null,
+      // Only when no single route could be named: once `route` already
+      // names it (and `option` its shape, when the shapes agree), the
+      // full candidate list would be redundant.
+      candidates: single == null ? candidates : const [],
     );
   }
 
@@ -750,6 +764,7 @@ _OptionOutcome _readOption({
         route: _resolvedRouteOf(node, committed: operandStarted),
         message: '${_describeOption(spec)} takes no value',
         token: token,
+        option: spec,
       );
     }
     if (_peekIsLiteralChild(node, argv, i + 1)) {
@@ -759,6 +774,7 @@ _OptionOutcome _readOption({
         route: reached,
         message: _misplacedAheadMessage(spec, reached),
         token: token,
+        option: spec,
       );
     }
     return _OptionRead(
@@ -781,6 +797,7 @@ _OptionOutcome _readOption({
         route: reached,
         message: _misplacedAheadMessage(spec, reached),
         token: token,
+        option: spec,
       );
     }
     return _OptionRead(
@@ -804,6 +821,7 @@ _OptionOutcome _readOption({
       route: _resolvedRouteOf(node, committed: operandStarted),
       message: 'missing value for ${_describeOption(spec)}',
       token: token,
+      option: spec,
     );
   }
   if (_peekIsLiteralChild(node, argv, i + 2)) {
@@ -813,6 +831,7 @@ _OptionOutcome _readOption({
       route: reached,
       message: _misplacedAheadMessage(spec, reached),
       token: token,
+      option: spec,
     );
   }
   return _OptionRead(

@@ -234,6 +234,8 @@ class CliRouter {
       String? message,
       String? argument,
       String? token,
+      OptionSpec? option,
+      List<CliRoute> candidates = const [],
     }) {
       return CliRejection(
         kind: kind,
@@ -243,6 +245,8 @@ class CliRouter {
         message: message,
         argument: argument,
         token: token,
+        option: option,
+        candidates: candidates,
       );
     }
 
@@ -263,6 +267,7 @@ class CliRouter {
                 '${_describeOption(parsed.spec)} is not accepted by '
                 "'${route.pattern}'",
             token: parsed.written,
+            option: parsed.spec,
           );
         }
       }
@@ -313,6 +318,7 @@ class CliRouter {
             CliRejectionKind.missingRequiredOption,
             route: r.route,
             message: 'missing required option ${_describeOption(spec)}',
+            option: spec,
           );
         }
       }
@@ -371,6 +377,7 @@ class CliRouter {
               route: _resolvedRouteOf(node, committed: operandStarted),
               message: '${_describeOption(parsed.spec)} was already given',
               token: parsed.written,
+              option: parsed.spec,
             );
           }
           parsedOptions.add(parsed);
@@ -384,6 +391,8 @@ class CliRouter {
           route: failed.route,
           message: failed.message,
           token: failed.token,
+          option: failed.option,
+          candidates: failed.candidates,
         );
       }
 

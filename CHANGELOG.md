@@ -114,6 +114,20 @@ resolution model, not an incremental change.
   null when argv simply ran out at a node with no route and no pending
   parameter). See the doc comments on `CliRejectionKind` for the exact
   guarantee per kind.
+- `CliRejection.option` (the implicated `OptionSpec`, when the router can
+  name exactly one) and `CliRejection.candidates` (every route still
+  reachable that declares an ambiguous option, never null, empty when not
+  applicable), typed instead of described in `message`. `option` is
+  non-null for `missingValue`, `unexpectedValue`, `repeatedOption` and
+  `missingRequiredOption` (route-local or global alike); for `unknownOption`
+  only via the options-mismatch path (a spec that was read but not accepted
+  by the resolved route); for `misplacedOption` only when one declared shape
+  can be named (a known option read ahead of a literal child, or every
+  route still reachable from here agreeing on the shape). `candidates` is
+  non-empty only for `misplacedOption`'s genuinely ambiguous case: several
+  routes still reachable from here declare the option and no single one of
+  them could be identified. See the doc comments on `CliRejectionKind` for
+  the exact guarantee per kind.
 - `CliRejectionKind.unknownOption` now also covers an option that is in
   scope while still resolving (offered by some route reachable ahead) but
   is not actually declared by the specific route the invocation resolves
