@@ -1,18 +1,29 @@
 import 'package:cli_router/cli_router.dart';
 
-CliRouter buildUsersModule() {
-  final r = CliRouter();
+final limitOption = OptionSpec.value(
+  'limit',
+  abbr: 'l',
+  required: false,
+  repeatable: false,
+);
+final activeOption = OptionSpec.flag('active', abbr: null, repeatable: false);
+final adminOption = OptionSpec.flag('admin', abbr: 'a', repeatable: false);
+
+CliRouter buildUsersModule({required List<OptionSpec> globalOptions}) {
+  final r = CliRouter(globalOptions: globalOptions);
 
   r.cmd(
     'list',
     handler((req) {
-      final limit = req.flagInt('limit') ?? 10;
-      final activeOnly = req.flagBool('active', defaultValue: false);
+      final limit = int.tryParse(req.option('limit')?.value ?? '') ?? 10;
+      final activeOnly = req.option('active') != null;
       req.stdout.writeln('Users.list(limit=$limit, activeOnly=$activeOnly)');
       req.stdout.writeln('- u#1  Alice');
       req.stdout.writeln('- u#2  Bob');
     }),
-    description: 'Lista usuarios (opciones: --limit N, --active)',
+    options: [limitOption, activeOption],
+    globals: true,
+    description: 'Lists users (options: --limit/-l N, --active)',
   );
 
   r.cmd(
@@ -21,28 +32,22 @@ CliRouter buildUsersModule() {
       final id = req.param('id');
       req.stdout.writeln('Users.show(id=$id)');
     }),
-    description: 'Muestra un usuario por id',
+    options: const [],
+    globals: true,
+    description: 'Shows a user by id',
   );
 
   r.cmd(
     'create <name>',
     handler((req) {
       final name = req.param('name');
-      final admin = req.flagBool('admin'); // --admin o -a
+      final admin = req.option('admin') != null;
       req.stdout.writeln('Users.create(name=$name, admin=$admin)');
     }),
-    description: 'Crea un usuario (opciones: --admin | -a)',
+    options: [adminOption],
+    globals: true,
+    description: 'Creates a user (option: --admin/-a, before the name)',
   );
-
-  // alias -a para --admin (ejemplo de cómo mapear ambos)
-  r.use((next) {
-    return (req) {
-      if (req.flags.containsKey('a') && !req.flags.containsKey('admin')) {
-        req.flags['admin'] = req.flags['a'];
-      }
-      return next(req);
-    };
-  });
 
   return r;
 }

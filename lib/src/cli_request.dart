@@ -1,73 +1,47 @@
 part of 'cli_router.dart';
 
-/// Represents a concrete invocation of a command.
+/// A concrete, resolved invocation, handed to a route's [CliHandler].
 class CliRequest {
   CliRequest({
     required this.originalArgs,
-    required this.matchedCommand,
+    required this.route,
     required this.params,
-    required this.flags,
-    required this.positionals,
+    required this.rest,
+    required this.options,
     io.IOSink? stdout,
     io.IOSink? stderr,
   }) : stdout = stdout ?? io.stdout,
        stderr = stderr ?? io.stderr;
 
-  /// Original args that were passed to main()
+  /// The exact args passed to [CliRouter.run].
   final List<String> originalArgs;
 
-  /// Command segments that matched (eg: 'module','use-case')
-  final List<String> matchedCommand;
+  /// The route that matched.
+  final CliRoute route;
 
-  /// Parameters for dynamic segments (eg: {'id': '42'})
+  /// Bound values for the route's positional parameters that were present.
   final Map<String, String> params;
 
-  /// Parsed flags: --k v, --k=v, -k v, -abc => {a:true,b:true,c:true}
-  final Map<String, String?> flags;
+  /// Operands collected by a trailing `*` wildcard; empty otherwise.
+  final List<String> rest;
 
-  /// Positionals that are not part of the route or flags (or that come after `--`)
-  final List<String> positionals;
+  /// Every option read on the invocation, in argv order, exactly as written.
+  final List<ParsedOption> options;
 
-  /// Output sinks
   final io.IOSink stdout;
   final io.IOSink stderr;
 
-  // ---- Flag helpers ----
+  /// The bound value for positional parameter `name`, or `null` if it was
+  /// not declared by the route or not present (an unconsumed optional one).
+  String? param(String name) => params[name];
 
-  String? flagString(String name, {List<String> aliases = const []}) {
-    for (final k in [name, ...aliases]) {
-      if (flags.containsKey(k)) return flags[k];
+  /// The first occurrence of option `name`, or `null` if it was not read on
+  /// this invocation. For a repeatable option that occurred more than once,
+  /// see [options] for every occurrence.
+  ParsedOption? option(String name) {
+    for (final o in options) {
+      if (o.spec.name == name) return o;
     }
     return null;
   }
-
-  bool flagBool(
-    String name, {
-    List<String> aliases = const [],
-    bool defaultValue = false,
-  }) {
-    final v = flagString(name, aliases: aliases);
-    if (v == null) return defaultValue;
-    final s = v.toLowerCase();
-    if (s.isEmpty) return true;
-    if (s == 'true' || s == '1' || s == 'yes' || s == 'on') return true;
-    if (s == 'false' || s == '0' || s == 'no' || s == 'off') return false;
-    return defaultValue;
-  }
-
-  int? flagInt(String name, {List<String> aliases = const []}) {
-    final v = flagString(name, aliases: aliases);
-    return v == null ? null : int.tryParse(v);
-  }
-
-  double? flagDouble(String name, {List<String> aliases = const []}) {
-    final v = flagString(name, aliases: aliases);
-    return v == null ? null : double.tryParse(v);
-  }
-
-  String? param(String name) => params[name];
-
-  bool get isHelpRequested =>
-      flagBool('help', aliases: const ['h']) ||
-      (positionals.isNotEmpty && positionals.first == 'help');
 }

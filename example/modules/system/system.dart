@@ -1,14 +1,16 @@
 import 'package:cli_router/cli_router.dart';
 
-CliRouter buildSystemModule() {
-  final r = CliRouter();
+CliRouter buildSystemModule({required List<OptionSpec> globalOptions}) {
+  final r = CliRouter(globalOptions: globalOptions);
 
   r.cmd(
     'version',
     handler((req) {
       req.stdout.writeln('system.version = 1.0.0');
     }),
-    description: 'Muestra la versión',
+    options: const [],
+    globals: true,
+    description: 'Shows the version',
   );
 
   r.cmd(
@@ -16,6 +18,8 @@ CliRouter buildSystemModule() {
     handler((req) async {
       req.stdout.writeln('pong');
     }),
+    options: const [],
+    globals: true,
     description: 'Ping/pong',
   );
 

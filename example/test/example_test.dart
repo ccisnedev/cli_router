@@ -23,8 +23,8 @@ void main() {
       ], workingDirectory: Directory.current.path);
 
       expect(result.exitCode, equals(0));
-      expect(result.stdout, contains('Ayuda (root):'));
-      expect(result.stdout, contains('Muestra ayuda general'));
+      expect(result.stdout, contains('Available commands:'));
+      expect(result.stdout, contains('Shows general help'));
     });
 
     test('user list', () async {
@@ -54,16 +54,16 @@ void main() {
       expect(result.stdout, contains('Users.show(id=42)'));
     });
 
-    test('order process with flags', () async {
+    test('order process with options before the operand', () async {
       final result = await Process.run(Platform.resolvedExecutable, [
         'run',
         'example/example.dart',
         'order',
         'process',
-        '900',
         '--dry-run',
         '--threads',
         '4',
+        '900',
       ], workingDirectory: Directory.current.path);
 
       expect(result.exitCode, equals(0));
@@ -71,6 +71,20 @@ void main() {
         result.stdout,
         contains('Orders.process(id=900, dryRun=true, threads=4)'),
       );
+    });
+
+    test('an option after the operand is rejected', () async {
+      final result = await Process.run(Platform.resolvedExecutable, [
+        'run',
+        'example/example.dart',
+        'order',
+        'process',
+        '900',
+        '--dry-run',
+      ], workingDirectory: Directory.current.path);
+
+      expect(result.exitCode, equals(64));
+      expect(result.stderr, contains('error:'));
     });
   });
 }
