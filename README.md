@@ -271,11 +271,19 @@ cli copy a --force b   # permute: valid, src=a dst=b, unchanged relative order
 cli copy a --force b   # strict:  misplacedOption
 ```
 
-Inside a route ending in a trailing `*` wildcard, permutation stops at the
-wildcard's first captured token: from there on, nothing is ever moved, so an
-option written among the wildcard's operands is `misplacedOption` in both
-modes. `--` also stops permutation: nothing after it is ever considered an
-option, moved or not.
+Inside a route ending in a trailing `*` wildcard, once the wildcard's first
+token appears, it and every token after it are operands: nothing from there
+on is ever even considered an option in permute mode, however it looks. This
+is the `docker run IMAGE CMD -flags` case. In strict mode the same
+invocation is still `misplacedOption`, unchanged from 0.2.0. An option
+written between a required parameter and the wildcard's first token is
+unaffected either way, and is still permuted normally in permute mode:
+
+```bash
+cli run a -v          # permute: valid, rest=[a, -v], neither token is an option
+cli run a -v          # strict:  misplacedOption
+cli run --verbose a -v # permute: valid, rest=[a, -v], only --verbose is read as an option
+```
 
 `run()` is the one place `POSIXLY_CORRECT` matters: it selects
 `OptionOrdering.strict` when the environment contains that key (its value is
@@ -291,13 +299,35 @@ final code = await router.run(
 );
 ```
 
-`--` itself, once an operand has already started, is `misplacedOption`
-("'--' goes before the program") in both modes, not silently absorbed and
-not folded into the operands that follow it:
+In strict mode, `--` once an operand has already started is always
+`misplacedOption` ("'--' goes before the program"), not silently absorbed
+and not folded into the operands that follow it, exactly as in `cli_router`
+0.2.0:
 
 ```bash
 cli eval rpn -- --json '1 2 +'   # valid: '--' before the operand
-cli eval rpn '1 2 +' --          # misplacedOption in both modes: '--' after the operand
+cli eval rpn '1 2 +' --          # strict: misplacedOption, '--' after the operand
+```
+
+In permute mode, rule 4 applies instead: `--` ends option parsing wherever it
+appears, not only before the first operand. The operands that came before it
+and the tokens that come after it become one combined operand sequence, in
+their original relative order, with options before and after it still
+hoisted as usual:
+
+```bash
+cli copy a -- b    # permute: valid, src=a dst=b (the operand split across -- is rescued)
+cli copy a -- b    # strict:  misplacedOption
+cli copy a -- -b   # permute: valid, src=a dst=-b ('-b' after -- is data, never an option)
+```
+
+The one exception is a trailing `--` with nothing after it: there is no
+operand on the other side to rescue, so it is left exactly where it was, and
+once an operand has already started it is still `misplacedOption` in both
+modes:
+
+```bash
+cli eval rpn '1 2 +' --   # misplacedOption in both modes: nothing follows '--'
 ```
 
 **The resolver is committed once the first operand starts.** The first

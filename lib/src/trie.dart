@@ -524,26 +524,17 @@ int _skipWidthFor(
 // written after an operand back in front of it.
 // ---------------------------------------------------------------------------
 
-/// One token group produced while walking the tail of argv for permutation:
-/// either a single option occurrence (its introducing token, plus a value
-/// token when one was consumed with it) or a single operand token.
-class _Chunk {
-  _Chunk.option(this.tokens) : isOption = true;
-  _Chunk.operand(String token) : tokens = [token], isOption = false;
-  final List<String> tokens;
-  final bool isOption;
-}
-
 /// How many tokens of `tail`, starting at `tail[j]` (already known
 /// option-shaped), belong to this one option occurrence: 1 for a flag or a
 /// long option with an attached `=value`, 2 for a value option that reads
 /// its value from the next token. Mirrors [_skipWidthFor], using whichever
 /// declaration [scope] or, failing that, any route in the router at all
-/// offers for this identity: normalization only needs a width to move the
-/// right number of tokens together, never the full misplaced-option
-/// diagnosis that `_readOption` computes; the strict grammar below still
-/// re-derives and re-checks everything once normalization is done.
-int _permuteOptionWidth(
+/// offers for this identity: normalization only needs a width (and whether
+/// the option takes a value at all) to move the right number of tokens
+/// together, never the full misplaced-option diagnosis that `_readOption`
+/// computes; the strict grammar below still re-derives and re-checks
+/// everything once normalization is done.
+({int width, bool takesValue}) _permuteOptionWidth(
   List<String> tail,
   int j,
   List<OptionSpec> scope,
@@ -561,28 +552,33 @@ int _permuteOptionWidth(
     identity = hasEquals ? rest.substring(0, eq) : rest;
   } else {
     final rest = token.substring(1);
-    if (rest.length != 1) return 1; // not a valid short option; leave alone.
+    if (rest.length != 1) {
+      // Not a valid short option; leave it alone.
+      return (width: 1, takesValue: false);
+    }
     identity = rest;
     hasEquals = false;
   }
   final spec =
       _findInScope(scope, identity, isLong) ??
       _findAnyDeclaration(allRoutes, globalOptions, identity, isLong);
-  if (spec == null) return 1;
-  return _skipWidthFor(spec, isLong, hasEquals, tail, j);
+  if (spec == null) return (width: 1, takesValue: false);
+  return (
+    width: _skipWidthFor(spec, isLong, hasEquals, tail, j),
+    takesValue: spec.takesValue,
+  );
 }
 
-/// How many leading operand chunks, starting from [node], are bound to
-/// required parameters before a trailing `*` wildcard starts capturing;
-/// `null` when [node]'s route (if any) has no wildcard reachable this way.
+/// How many leading operands, starting from [node], are bound to required
+/// parameters before a trailing `*` wildcard starts capturing; `null` when
+/// [node]'s route (if any) has no wildcard reachable this way.
 ///
 /// Mirrors the unconditional precedence `CliRouter.resolve` itself applies
 /// (see `_TrieNode`'s dartdoc): while a required parameter is still pending,
 /// every operand goes to it, one per hop, before the wildcard is ever
 /// considered. The wildcard's own first captured operand is therefore the
 /// operand at index [totalOperandCount] counted from here, once every
-/// required-parameter hop on the way is exhausted; that operand, and every
-/// one after it, must never be permuted; see [_normalizeForPermute].
+/// required-parameter hop on the way is exhausted; see [_normalizeForPermute].
 int? _wildcardFreezeIndex(_TrieNode node, int totalOperandCount) {
   var n = node;
   var consumed = 0;
@@ -601,12 +597,45 @@ int? _wildcardFreezeIndex(_TrieNode node, int totalOperandCount) {
 /// Rewrites [argv] for `OptionOrdering.permute`: after the route words are
 /// matched (walking only literal children, exactly as `CliRouter.resolve`
 /// itself does before any operand starts), every option in the remainder
-/// (with its value, for a value option) moves in front of every operand,
-/// preserving the relative order within each group. `--` stops the rewrite:
-/// it and everything after it are left exactly where they are. Inside a `*`
-/// wildcard route, the wildcard's first captured operand, and everything
-/// from there on, is left exactly where it is too (see
-/// [_wildcardFreezeIndex]).
+/// moves in front of every operand, preserving the relative order within
+/// each group (issue #8).
+///
+/// Two boundaries stop this from applying to the rest of the tokens, and are
+/// never reordered or reclassified past that point, even when they look
+/// like an option:
+///
+///   * `--`, wherever it appears: rule 4 of issue #8 says it ends option
+///     parsing anywhere, not only before the first operand. The operands
+///     that came before it and the tokens that come after it are simply
+///     concatenated, in their original relative order, as one combined
+///     operand sequence; the marker itself is not kept verbatim (a fresh
+///     one is written in the one place a marker can safely go, see below),
+///     except when nothing at all follows it, in which case it is left
+///     exactly where it was so the unchanged strict grammar still rejects
+///     it as misplaced once an operand has already started.
+///   * inside a route ending in a trailing `*` wildcard, the wildcard's own
+///     first captured operand: from there on, nothing is ever an option
+///     again, so an invocation like `docker run IMAGE CMD -flags` reaches
+///     the wildcard with its flags intact, as data (see
+///     [_wildcardFreezeIndex]). Options written between a required
+///     parameter and the wildcard's first token are unaffected and still
+///     hoisted normally.
+///
+/// Neither boundary is enforced by touching the strict grammar (that engine
+/// is shared with `OptionOrdering.strict` and must stay exactly as it was
+/// for 0.2.0): instead, whenever tokens need protecting from being read as
+/// options again, a single `--` is written immediately after the hoisted
+/// options and before every operand, required-parameter or wildcard alike.
+/// That position is always safe: nothing has been consumed as an operand
+/// yet at that point, so the strict grammar's own `'--' goes before the
+/// program` rule never fires on it, and it has no effect at all on plain
+/// operand tokens, which are read by required-parameter position, not by
+/// shape. The same guard also closes a narrower gap: a value option hoisted
+/// without a value of its own (nothing followed it in the original argv)
+/// must not end up directly in front of an unrelated, relocated operand,
+/// or the strict grammar would read that operand as the option's value; the
+/// guard makes the strict grammar report `missingValue` for it instead, the
+/// same as if it had been written at the end of the line to begin with.
 ///
 /// This is a pure rewrite of the token array; it does not itself decide
 /// whether the result is valid. `CliRouter.resolve` runs its ordinary strict
@@ -633,65 +662,80 @@ List<String> _normalizeForPermute(
   final tail = argv.sublist(i);
   if (tail.length < 2) return argv;
 
-  final ddIndex = tail.indexOf('--');
-  final ddEnd = ddIndex == -1 ? tail.length : ddIndex;
   final scope = _scopeAt(node, globalOptions);
+  final wildcardHops = _wildcardFreezeIndex(node, tail.length);
 
-  final chunks = <_Chunk>[];
+  final hoisted = <String>[];
+  final preOperands = <String>[];
+  final frozen = <String>[];
+  var operandsSeen = 0;
+  var frozenStarted = false;
+  var needsGuardForFreeze = false;
+  var hoistedHasDanglingValue = false;
+
   var j = 0;
-  while (j < ddEnd) {
+  while (j < tail.length) {
     final token = tail[j];
+
+    if (frozenStarted) {
+      frozen.add(token);
+      j++;
+      continue;
+    }
+
+    if (token == '--') {
+      if (j == tail.length - 1) {
+        // Nothing follows: there is no operand to rescue, so this is left
+        // exactly where it is, unrescued, matching the strict grammar (an
+        // operand may already have started, making this misplaced, or none
+        // did, in which case this is a no-op both before and after).
+        frozen.add(token);
+        frozenStarted = true;
+        j++;
+        continue;
+      }
+      frozenStarted = true;
+      needsGuardForFreeze = true;
+      j++; // Drop the marker; a fresh one is written in front below.
+      continue;
+    }
+
     if (looksLikeOption(token)) {
-      final width = _permuteOptionWidth(
+      final result = _permuteOptionWidth(
         tail,
         j,
         scope,
         allRoutes,
         globalOptions,
       );
-      final end = (j + width).clamp(0, ddEnd);
-      chunks.add(_Chunk.option(tail.sublist(j, end)));
-      j = end;
-    } else {
-      chunks.add(_Chunk.operand(token));
-      j++;
-    }
-  }
-
-  final operandCount = chunks.where((c) => !c.isOption).length;
-  final freezeIndex = _wildcardFreezeIndex(node, operandCount);
-
-  var splitAt = chunks.length;
-  if (freezeIndex != null) {
-    var seen = 0;
-    for (var k = 0; k < chunks.length; k++) {
-      if (!chunks[k].isOption) {
-        if (seen == freezeIndex) {
-          splitAt = k;
-          break;
-        }
-        seen++;
+      final end = (j + result.width).clamp(0, tail.length);
+      hoisted.addAll(tail.sublist(j, end));
+      if (result.width == 1 && result.takesValue) {
+        hoistedHasDanglingValue = true;
       }
+      j = end;
+      continue;
     }
+
+    if (wildcardHops != null && operandsSeen == wildcardHops) {
+      frozenStarted = true;
+      needsGuardForFreeze = true;
+      frozen.add(token);
+      j++;
+      continue;
+    }
+
+    preOperands.add(token);
+    operandsSeen++;
+    j++;
   }
 
-  final permutable = chunks.sublist(0, splitAt);
-  final frozen = chunks.sublist(splitAt);
+  final needsGuard =
+      needsGuardForFreeze ||
+      (hoistedHasDanglingValue &&
+          (preOperands.isNotEmpty || frozen.isNotEmpty));
 
-  final options = <String>[];
-  final operands = <String>[];
-  for (final c in permutable) {
-    (c.isOption ? options : operands).addAll(c.tokens);
-  }
-  final frozenTokens = <String>[for (final c in frozen) ...c.tokens];
-
-  return [
-    ...head,
-    ...options,
-    ...operands,
-    ...frozenTokens,
-    ...tail.sublist(ddEnd),
-  ];
+  return [...head, ...hoisted, if (needsGuard) '--', ...preOperands, ...frozen];
 }
 
 /// Walks only literal and required-parameter transitions from [node] through
