@@ -6,13 +6,13 @@ import 'package:test/test.dart';
 import 'support.dart';
 
 CliResolution _resolveOk(CliRouter router, List<String> args) {
-  final outcome = router.resolve(args);
+  final outcome = resolveStrict(router, args);
   expect(outcome, isA<CliResolution>(), reason: 'for $args, got $outcome');
   return outcome as CliResolution;
 }
 
 CliRejection _resolveRejected(CliRouter router, List<String> args) {
-  final outcome = router.resolve(args);
+  final outcome = resolveStrict(router, args);
   expect(outcome, isA<CliRejection>(), reason: 'for $args, got $outcome');
   return outcome as CliRejection;
 }
@@ -180,7 +180,7 @@ void main() {
         ],
         globals: false,
       );
-      final outcome = router.resolve(['build', '-d', 'a', '-d', 'b']);
+      final outcome = resolveStrict(router, ['build', '-d', 'a', '-d', 'b']);
       expect(outcome, isA<CliResolution>());
       expect((outcome as CliResolution).options, hasLength(2));
     });
@@ -205,7 +205,7 @@ void main() {
         'a',
         '--define=',
       ];
-      final outcome = router.resolve(argv);
+      final outcome = resolveStrict(router, argv);
 
       expect(outcome, isA<CliResolution>());
       final occurrences = (outcome as CliResolution).options;

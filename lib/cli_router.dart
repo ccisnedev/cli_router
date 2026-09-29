@@ -2,7 +2,7 @@
 ///
 /// Import `package:cli_router/cli_router.dart` to use:
 /// - CliRouter, CliRequest, CliHandler, CliMiddleware
-/// - OptionSpec, ParsedOption, looksLikeOption
+/// - OptionSpec, ParsedOption, looksLikeOption, OptionOrdering
 /// - CliRoute, CliOutcome, CliResolution, CliRejection, CliRejectionKind,
 ///   CliRejectionHandler
 /// - ListedCommand
@@ -18,6 +18,7 @@ export 'src/cli_router.dart'
         OptionSpec,
         ParsedOption,
         looksLikeOption,
+        OptionOrdering,
         CliRoute,
         CliOutcome,
         CliResolution,

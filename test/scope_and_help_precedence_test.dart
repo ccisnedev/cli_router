@@ -14,7 +14,7 @@ void main() {
   group('global options are in scope before a route is resolved', () {
     test('eval --help: incomplete, carries [help], consumed [eval]', () {
       final router = buildCalculatrixRouter();
-      final outcome = router.resolve(['eval', '--help']);
+      final outcome = resolveStrict(router, ['eval', '--help']);
 
       expect(outcome, isA<CliRejection>());
       final rejection = outcome as CliRejection;
@@ -28,7 +28,7 @@ void main() {
     test('commands show --help: missingArgument, carries [help], consumed '
         '[commands, show]', () {
       final router = buildCalculatrixRouter();
-      final outcome = router.resolve(['commands', 'show', '--help']);
+      final outcome = resolveStrict(router, ['commands', 'show', '--help']);
 
       expect(outcome, isA<CliRejection>());
       final rejection = outcome as CliRejection;
@@ -43,7 +43,7 @@ void main() {
       final router = buildCalculatrixRouter();
       // 'eval' itself is not a route (only 'eval rpn' and 'eval infix'
       // are), yet -q (global) is readable there.
-      final outcome = router.resolve(['eval', '-q']);
+      final outcome = resolveStrict(router, ['eval', '-q']);
 
       expect(outcome, isA<CliRejection>());
       final rejection = outcome as CliRejection;
@@ -55,7 +55,7 @@ void main() {
         'even though globals are in scope there', () {
       final router = buildCalculatrixRouter();
       // -f belongs to 'eval rpn' / 'eval infix', not to 'eval' itself.
-      final outcome = router.resolve(['eval', '-f', 'p.rpn', 'rpn']);
+      final outcome = resolveStrict(router, ['eval', '-f', 'p.rpn', 'rpn']);
 
       expect(outcome, isA<CliRejection>());
       final rejection = outcome as CliRejection;
@@ -66,7 +66,7 @@ void main() {
     test('a genuinely unknown option at a branching node is unknownOption, '
         'not incomplete', () {
       final router = buildCalculatrixRouter();
-      final outcome = router.resolve(['eval', '--bogus']);
+      final outcome = resolveStrict(router, ['eval', '--bogus']);
 
       expect(outcome, isA<CliRejection>());
       expect(
@@ -89,7 +89,7 @@ void main() {
       );
       router.cmd('run sub', (req) async => 0, options: const [], globals: true);
 
-      final outcome = router.resolve(['run', '--help', '--']);
+      final outcome = resolveStrict(router, ['run', '--help', '--']);
 
       expect(outcome, isA<CliRejection>());
       final rejection = outcome as CliRejection;
@@ -121,7 +121,7 @@ void main() {
         globals: true,
       );
 
-      final outcome = router.resolve(['push', '--json', '--force']);
+      final outcome = resolveStrict(router, ['push', '--json', '--force']);
 
       expect(outcome, isA<CliRejection>());
       final rejection = outcome as CliRejection;
@@ -148,7 +148,7 @@ void main() {
         globals: false,
       );
 
-      final outcome = router.resolve(['push', '--target', 'origin']);
+      final outcome = resolveStrict(router, ['push', '--target', 'origin']);
 
       expect(outcome, isA<CliResolution>());
     });

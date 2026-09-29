@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/)
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.2.1] - 2026-09-28
+
+### Added
+- `OptionOrdering` enum: `permute` (the new default) and `strict`.
+  `CliRouter.resolve(argv, {ordering: OptionOrdering.permute})` gains the
+  `ordering` named parameter. `resolve()` stays pure and never reads the
+  environment regardless of `ordering`.
+- `OptionOrdering.permute`: GNU `getopt` style permutation. An option
+  written after an operand has already started is moved in front of it
+  before the strict grammar runs, preserving the relative order of the
+  options and of the operands. A value option moves together with its value
+  as one unit, and a hoisted value option with no value of its own (nothing
+  followed it in the original argv) is never left directly in front of an
+  unrelated, relocated operand, so it still correctly reports `missingValue`
+  instead of absorbing that operand. `--` ends option parsing wherever it
+  appears, not only before the first operand: the operands before it and the
+  tokens after it become one combined operand sequence, in their original
+  relative order, unless nothing follows it, in which case it is left
+  exactly where it was. Inside a route ending in a trailing `*` wildcard,
+  once the wildcard's first token appears, it and everything after it are
+  operands: nothing from there on is ever considered an option again,
+  however it looks (the `docker run IMAGE CMD -flags` case). An option
+  written before the route word that declares it is still `misplacedOption`,
+  in either mode. Negative numbers stay operands and are never moved as if
+  they were options.
+- `OptionOrdering.strict`: the plain POSIX grammar, reproducing
+  `cli_router` 0.2.0's behavior exactly, `misplacedOption` included.
+- `CliRouter.run` gains an injectable `environment` named parameter
+  (`Map<String, String>?`, defaulting to `Platform.environment`) and now
+  selects `OptionOrdering.strict` when that environment contains
+  `POSIXLY_CORRECT` (presence, not value, matching GNU `getopt`'s own
+  convention), or `OptionOrdering.permute` otherwise.
+
 ## [0.2.0] - 2026-09-25
 
 A trie based router and a declarative, typed option schema, replacing the

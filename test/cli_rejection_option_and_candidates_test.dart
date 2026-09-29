@@ -19,7 +19,7 @@ import 'package:test/test.dart';
 import 'support.dart';
 
 CliRejection _rejected(CliRouter router, List<String> args) {
-  final outcome = router.resolve(args);
+  final outcome = resolveStrict(router, args);
   expect(outcome, isA<CliRejection>(), reason: 'for $args, got $outcome');
   return outcome as CliRejection;
 }
@@ -124,10 +124,7 @@ void main() {
 
     test("cx '1 2 +' --: a bare '--' after an operand is not an OptionSpec "
         'at all, option is null', () {
-      final rejection = _rejected(buildCalculatrixRouter(), [
-        '1 2 +',
-        '--',
-      ]);
+      final rejection = _rejected(buildCalculatrixRouter(), ['1 2 +', '--']);
       expect(rejection.kind, equals(CliRejectionKind.misplacedOption));
       expect(rejection.token, equals('--'));
       expect(rejection.option, isNull);
@@ -259,9 +256,12 @@ void main() {
         repeatable: false,
       );
       final router = CliRouter(globalOptions: const []);
-      router.cmd('deploy', (req) async => 0, options: [
-        targetOpt,
-      ], globals: false);
+      router.cmd(
+        'deploy',
+        (req) async => 0,
+        options: [targetOpt],
+        globals: false,
+      );
 
       final rejection = _rejected(router, ['deploy']);
       expect(rejection.kind, equals(CliRejectionKind.missingRequiredOption));
@@ -304,10 +304,12 @@ void main() {
         repeatable: false,
       );
       final router = CliRouter(globalOptions: const []);
-      router.cmd('deploy', (req) async => 0, options: [
-        targetOpt,
-        regionOpt,
-      ], globals: false);
+      router.cmd(
+        'deploy',
+        (req) async => 0,
+        options: [targetOpt, regionOpt],
+        globals: false,
+      );
 
       final rejection = _rejected(router, ['deploy']);
       expect(rejection.kind, equals(CliRejectionKind.missingRequiredOption));
@@ -332,9 +334,12 @@ void main() {
         repeatable: false,
       );
       final router = CliRouter(globalOptions: [regionOpt]);
-      router.cmd('deploy', (req) async => 0, options: [
-        targetOpt,
-      ], globals: true);
+      router.cmd(
+        'deploy',
+        (req) async => 0,
+        options: [targetOpt],
+        globals: true,
+      );
 
       final rejection = _rejected(router, ['deploy']);
       expect(rejection.kind, equals(CliRejectionKind.missingRequiredOption));
