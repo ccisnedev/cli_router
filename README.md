@@ -33,9 +33,14 @@ upgrading from 0.1.x.
   (or an equal one) that the root router uses.
 - Route patterns: literal words, required `<name>` parameters, a single
   trailing optional `[<name>]` parameter, or a single trailing `*` wildcard.
-- POSIX option ordering: **route, then options, then operands**. `--` ends
-  option parsing, but only before the first operand; `--` after an operand
-  has already started is `misplacedOption`, not silently dropped.
+- Option ordering: **route, then options, then operands**. By default
+  (`OptionOrdering.permute`), an option written after an operand is moved in
+  front of it before that grammar runs, GNU `getopt` style.
+  `OptionOrdering.strict` keeps the plain POSIX grammar instead, where such
+  an option is `misplacedOption`. `run()` picks `strict` automatically when
+  `POSIXLY_CORRECT` is set in the environment. `--` ends option parsing, but
+  only before the first operand; `--` after an operand has already started
+  is `misplacedOption`, not silently dropped.
 - A declarative option schema: `OptionSpec.flag` and `OptionSpec.value`,
   with `abbr`, `required` and `repeatable` all explicit.
 - Lossless option parsing: every occurrence of every option is kept, in
@@ -228,27 +233,71 @@ final allFiles = req.options
     .map((o) => o.value);              // every occurrence, in order
 ```
 
-### POSIX option ordering
+### Option ordering
 
 A route's own tokens come first, then its options, then its operands
 (required parameters that end the route, the optional trailing parameter,
-or wildcard operands). An option written after an operand has already
-started, or before the route word it is declared on, is `misplacedOption`:
+or wildcard operands). An option written before the route word that
+declares it is always `misplacedOption`, in either mode.
 
-```bash
-cli eval rpn --json '1 2 +'   # valid: option before the operand
-cli eval rpn '1 2 +' --json   # misplacedOption: option after the operand
+`resolve()` takes an `ordering` parameter, `OptionOrdering.permute` by
+default:
+
+```dart
+enum OptionOrdering { permute, strict }
 ```
 
-`--` ends option parsing, but only before the first operand starts; every
-token after it is then an operand, even if it looks like an option. `--`
-itself, once an operand has already started, is `misplacedOption`
-("'--' goes before the program"), not silently absorbed and not folded
-into the operands that follow it:
+- `OptionOrdering.permute` (the default) follows GNU `getopt`: an option
+  written after an operand has already started is moved in front of it,
+  preserving the relative order of the options and of the operands, before
+  the grammar below is applied. `resolve()` never reads the environment;
+  this is the default regardless of `POSIXLY_CORRECT`.
+- `OptionOrdering.strict` is the plain POSIX grammar: an option after an
+  operand has already started is `misplacedOption`, exactly as in
+  `cli_router` 0.2.0.
+
+```bash
+cli eval rpn --json '1 2 +'   # valid in both modes: option before the operand
+cli eval rpn '1 2 +' --json   # permute: valid, --json moves in front of the operand
+                               # strict:  misplacedOption
+```
+
+Permutation only ever reorders whole tokens (an option and its value move
+together as one unit); it never moves an operand, so a negative number such
+as `-1` is never mistaken for an option, and two operands never swap places:
+
+```bash
+cli copy a --force b   # permute: valid, src=a dst=b, unchanged relative order
+cli copy a --force b   # strict:  misplacedOption
+```
+
+Inside a route ending in a trailing `*` wildcard, permutation stops at the
+wildcard's first captured token: from there on, nothing is ever moved, so an
+option written among the wildcard's operands is `misplacedOption` in both
+modes. `--` also stops permutation: nothing after it is ever considered an
+option, moved or not.
+
+`run()` is the one place `POSIXLY_CORRECT` matters: it selects
+`OptionOrdering.strict` when the environment contains that key (its value is
+irrelevant, matching GNU `getopt`'s own convention), and
+`OptionOrdering.permute` otherwise. The environment is `Platform.environment`
+by default, or the injectable `environment` parameter:
+
+```dart
+final code = await router.run(
+  args,
+  onReject: onReject,
+  environment: Platform.environment, // the default; inject a fake map in tests
+);
+```
+
+`--` itself, once an operand has already started, is `misplacedOption`
+("'--' goes before the program") in both modes, not silently absorbed and
+not folded into the operands that follow it:
 
 ```bash
 cli eval rpn -- --json '1 2 +'   # valid: '--' before the operand
-cli eval rpn '1 2 +' --          # misplacedOption: '--' after the operand
+cli eval rpn '1 2 +' --          # misplacedOption in both modes: '--' after the operand
 ```
 
 **The resolver is committed once the first operand starts.** The first
@@ -275,9 +324,10 @@ router.cmd('copy <src> <dst>', handler, options: const [], globals: true);
 ```
 
 ```bash
-cli copy --json a b   # valid: the option precedes both operands
-cli copy a --json b   # misplacedOption, naming 'copy <src> <dst>' even
-                       # though <dst> is still pending
+cli copy --json a b   # valid in both modes: the option precedes both operands
+cli copy a --json b   # permute: valid, --json moves in front of both operands
+                       # strict:  misplacedOption, naming 'copy <src> <dst>'
+                       #          even though <dst> is still pending
 ```
 
 ### Which tokens count as options?

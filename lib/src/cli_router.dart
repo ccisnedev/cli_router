@@ -213,10 +213,24 @@ class CliRouter {
       ),
   ];
 
-  /// Resolves [argv] against the registered routes. Pure: performs no I/O
-  /// and never throws for a malformed invocation, only for a bug in the
-  /// router itself.
-  CliOutcome resolve(List<String> argv) {
+  /// Resolves [rawArgv] against the registered routes. Pure: performs no I/O,
+  /// never reads the environment, and never throws for a malformed
+  /// invocation, only for a bug in the router itself.
+  ///
+  /// [ordering] decides how an option written after an operand is treated.
+  /// With the default, [OptionOrdering.permute], [rawArgv] is first rewritten
+  /// (see [OptionOrdering] and `_normalizeForPermute`) so that such an option
+  /// moves in front of the operands; the strict grammar below then runs on
+  /// that rewritten argv. With [OptionOrdering.strict], [rawArgv] is used
+  /// exactly as given, reproducing cli_router 0.2.0 exactly, including
+  /// `misplacedOption` for an option written after an operand.
+  CliOutcome resolve(
+    List<String> rawArgv, {
+    OptionOrdering ordering = OptionOrdering.permute,
+  }) {
+    final argv = ordering == OptionOrdering.permute
+        ? _normalizeForPermute(rawArgv, _root, _globalOptions, _flatRoutes)
+        : rawArgv;
     var node = _root;
     final consumed = <String>[];
     final params = <String, String>{};
@@ -500,15 +514,30 @@ class CliRouter {
   /// avoid forcing every caller to thread the process streams through by
   /// hand; pass a fake [io.IOSink] explicitly (e.g. in a test) to capture
   /// what a handler writes instead.
+  ///
+  /// [environment] decides [resolve]'s [OptionOrdering]: when it holds a
+  /// `POSIXLY_CORRECT` key (any value, following the same convention GNU
+  /// `getopt` itself uses), resolution is [OptionOrdering.strict]; otherwise
+  /// it is [OptionOrdering.permute]. [resolve] itself never reads the
+  /// environment; only [run] does, and only to make this one choice.
+  /// [environment] defaults to `null`, which falls back to the real process
+  /// environment, [io.Platform.environment]; pass a fake map explicitly
+  /// (e.g. in a test) to control which mode is selected without touching the
+  /// real environment.
   Future<int> run(
     List<String> args, {
     required CliRejectionHandler onReject,
     io.IOSink? stdout,
     io.IOSink? stderr,
+    Map<String, String>? environment,
   }) async {
     final out = stdout ?? io.stdout;
     final err = stderr ?? io.stderr;
-    final outcome = resolve(args);
+    final env = environment ?? io.Platform.environment;
+    final ordering = env.containsKey('POSIXLY_CORRECT')
+        ? OptionOrdering.strict
+        : OptionOrdering.permute;
+    final outcome = resolve(args, ordering: ordering);
     if (outcome is CliRejection) {
       return await onReject(outcome);
     }

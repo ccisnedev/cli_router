@@ -518,6 +518,182 @@ int _skipWidthFor(
   return 1;
 }
 
+// ---------------------------------------------------------------------------
+// Argv normalization for OptionOrdering.permute (issue #8): a GNU getopt
+// style rewrite, run before the strict grammar above, that moves an option
+// written after an operand back in front of it.
+// ---------------------------------------------------------------------------
+
+/// One token group produced while walking the tail of argv for permutation:
+/// either a single option occurrence (its introducing token, plus a value
+/// token when one was consumed with it) or a single operand token.
+class _Chunk {
+  _Chunk.option(this.tokens) : isOption = true;
+  _Chunk.operand(String token) : tokens = [token], isOption = false;
+  final List<String> tokens;
+  final bool isOption;
+}
+
+/// How many tokens of `tail`, starting at `tail[j]` (already known
+/// option-shaped), belong to this one option occurrence: 1 for a flag or a
+/// long option with an attached `=value`, 2 for a value option that reads
+/// its value from the next token. Mirrors [_skipWidthFor], using whichever
+/// declaration [scope] or, failing that, any route in the router at all
+/// offers for this identity: normalization only needs a width to move the
+/// right number of tokens together, never the full misplaced-option
+/// diagnosis that `_readOption` computes; the strict grammar below still
+/// re-derives and re-checks everything once normalization is done.
+int _permuteOptionWidth(
+  List<String> tail,
+  int j,
+  List<OptionSpec> scope,
+  List<_RegisteredRoute> allRoutes,
+  List<OptionSpec> globalOptions,
+) {
+  final token = tail[j];
+  final isLong = token.length >= 2 && token[0] == '-' && token[1] == '-';
+  String identity;
+  bool hasEquals;
+  if (isLong) {
+    final rest = token.substring(2);
+    final eq = rest.indexOf('=');
+    hasEquals = eq >= 0;
+    identity = hasEquals ? rest.substring(0, eq) : rest;
+  } else {
+    final rest = token.substring(1);
+    if (rest.length != 1) return 1; // not a valid short option; leave alone.
+    identity = rest;
+    hasEquals = false;
+  }
+  final spec =
+      _findInScope(scope, identity, isLong) ??
+      _findAnyDeclaration(allRoutes, globalOptions, identity, isLong);
+  if (spec == null) return 1;
+  return _skipWidthFor(spec, isLong, hasEquals, tail, j);
+}
+
+/// How many leading operand chunks, starting from [node], are bound to
+/// required parameters before a trailing `*` wildcard starts capturing;
+/// `null` when [node]'s route (if any) has no wildcard reachable this way.
+///
+/// Mirrors the unconditional precedence `CliRouter.resolve` itself applies
+/// (see `_TrieNode`'s dartdoc): while a required parameter is still pending,
+/// every operand goes to it, one per hop, before the wildcard is ever
+/// considered. The wildcard's own first captured operand is therefore the
+/// operand at index [totalOperandCount] counted from here, once every
+/// required-parameter hop on the way is exhausted; that operand, and every
+/// one after it, must never be permuted; see [_normalizeForPermute].
+int? _wildcardFreezeIndex(_TrieNode node, int totalOperandCount) {
+  var n = node;
+  var consumed = 0;
+  while (consumed < totalOperandCount) {
+    if (n.paramChild != null) {
+      n = n.paramChild!;
+      consumed++;
+      continue;
+    }
+    if (n.wildcardRoute != null) return consumed;
+    return null;
+  }
+  return null;
+}
+
+/// Rewrites [argv] for `OptionOrdering.permute`: after the route words are
+/// matched (walking only literal children, exactly as `CliRouter.resolve`
+/// itself does before any operand starts), every option in the remainder
+/// (with its value, for a value option) moves in front of every operand,
+/// preserving the relative order within each group. `--` stops the rewrite:
+/// it and everything after it are left exactly where they are. Inside a `*`
+/// wildcard route, the wildcard's first captured operand, and everything
+/// from there on, is left exactly where it is too (see
+/// [_wildcardFreezeIndex]).
+///
+/// This is a pure rewrite of the token array; it does not itself decide
+/// whether the result is valid. `CliRouter.resolve` runs its ordinary strict
+/// grammar on whatever this returns, so every other rule (unknown options,
+/// missing values, an option before the route word that declares it, and so
+/// on) is still enforced exactly as before, just against the rewritten argv.
+List<String> _normalizeForPermute(
+  List<String> argv,
+  _TrieNode root,
+  List<OptionSpec> globalOptions,
+  List<_RegisteredRoute> allRoutes,
+) {
+  var node = root;
+  var i = 0;
+  while (i < argv.length) {
+    final token = argv[i];
+    if (token == '--' || looksLikeOption(token)) break;
+    final lit = node.literalChildren[token];
+    if (lit == null) break;
+    node = lit;
+    i++;
+  }
+  final head = argv.sublist(0, i);
+  final tail = argv.sublist(i);
+  if (tail.length < 2) return argv;
+
+  final ddIndex = tail.indexOf('--');
+  final ddEnd = ddIndex == -1 ? tail.length : ddIndex;
+  final scope = _scopeAt(node, globalOptions);
+
+  final chunks = <_Chunk>[];
+  var j = 0;
+  while (j < ddEnd) {
+    final token = tail[j];
+    if (looksLikeOption(token)) {
+      final width = _permuteOptionWidth(
+        tail,
+        j,
+        scope,
+        allRoutes,
+        globalOptions,
+      );
+      final end = (j + width).clamp(0, ddEnd);
+      chunks.add(_Chunk.option(tail.sublist(j, end)));
+      j = end;
+    } else {
+      chunks.add(_Chunk.operand(token));
+      j++;
+    }
+  }
+
+  final operandCount = chunks.where((c) => !c.isOption).length;
+  final freezeIndex = _wildcardFreezeIndex(node, operandCount);
+
+  var splitAt = chunks.length;
+  if (freezeIndex != null) {
+    var seen = 0;
+    for (var k = 0; k < chunks.length; k++) {
+      if (!chunks[k].isOption) {
+        if (seen == freezeIndex) {
+          splitAt = k;
+          break;
+        }
+        seen++;
+      }
+    }
+  }
+
+  final permutable = chunks.sublist(0, splitAt);
+  final frozen = chunks.sublist(splitAt);
+
+  final options = <String>[];
+  final operands = <String>[];
+  for (final c in permutable) {
+    (c.isOption ? options : operands).addAll(c.tokens);
+  }
+  final frozenTokens = <String>[for (final c in frozen) ...c.tokens];
+
+  return [
+    ...head,
+    ...options,
+    ...operands,
+    ...frozenTokens,
+    ...tail.sublist(ddEnd),
+  ];
+}
+
 /// Walks only literal and required-parameter transitions from [node] through
 /// [remaining], to find which route the invocation would eventually reach if
 /// this option token (and its value) were not there. Used only to name the

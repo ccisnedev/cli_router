@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/)
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.2.1] - 2026-09-28
+
+### Added
+- `OptionOrdering` enum: `permute` (the new default) and `strict`.
+  `CliRouter.resolve(argv, {ordering: OptionOrdering.permute})` gains the
+  `ordering` named parameter. `resolve()` stays pure and never reads the
+  environment regardless of `ordering`.
+- `OptionOrdering.permute`: GNU `getopt` style permutation. An option
+  written after an operand has already started is moved in front of it
+  before the strict grammar runs, preserving the relative order of the
+  options and of the operands. A value option moves together with its
+  value as one unit. `--` stops the rewrite: nothing after it is ever
+  considered an option. Inside a route ending in a trailing `*` wildcard,
+  nothing from the wildcard's first captured token on is ever moved. An
+  option written before the route word that declares it is still
+  `misplacedOption`, in either mode. Negative numbers stay operands and are
+  never moved as if they were options.
+- `OptionOrdering.strict`: the plain POSIX grammar, reproducing
+  `cli_router` 0.2.0's behavior exactly, `misplacedOption` included.
+- `CliRouter.run` gains an injectable `environment` named parameter
+  (`Map<String, String>?`, defaulting to `Platform.environment`) and now
+  selects `OptionOrdering.strict` when that environment contains
+  `POSIXLY_CORRECT` (presence, not value, matching GNU `getopt`'s own
+  convention), or `OptionOrdering.permute` otherwise.
+
 ## [0.2.0] - 2026-09-25
 
 A trie based router and a declarative, typed option schema, replacing the
