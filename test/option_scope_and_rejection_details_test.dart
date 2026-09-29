@@ -18,7 +18,7 @@ import 'package:test/test.dart';
 import 'support.dart';
 
 CliRejection _rejected(CliRouter router, List<String> args) {
-  final outcome = router.resolve(args, ordering: OptionOrdering.strict);
+  final outcome = resolveStrict(router, args);
   expect(outcome, isA<CliRejection>(), reason: 'for $args, got $outcome');
   return outcome as CliRejection;
 }
@@ -46,7 +46,7 @@ void main() {
     test('the same option is still fine on a route that does accept '
         'globals', () {
       final router = buildCalculatrixRouter();
-      final outcome = router.resolve(['--json', 'version'], ordering: OptionOrdering.strict);
+      final outcome = resolveStrict(router, ['--json', 'version']);
       // 'version' is a literal child of root, so the option is misplaced
       // (it must come after the route, not before); it is never silently
       // accepted at the wrong position either. This just documents that the
@@ -229,7 +229,7 @@ void main() {
         'before either child is chosen, and accepted once that route is '
         'the one resolved', () {
       final router = buildDualNodeRouter();
-      final outcome = router.resolve(['--force', 'anything'], ordering: OptionOrdering.strict);
+      final outcome = resolveStrict(router, ['--force', 'anything']);
       expect(outcome, isA<CliResolution>());
       expect((outcome as CliResolution).params['target'], equals('anything'));
       expect(outcome.options.single.spec.name, equals('force'));
@@ -258,7 +258,7 @@ void main() {
 
     test('the literal route itself still resolves normally', () {
       final router = buildDualNodeRouter();
-      final outcome = router.resolve(['build'], ordering: OptionOrdering.strict);
+      final outcome = resolveStrict(router, ['build']);
       expect(outcome, isA<CliResolution>());
       expect((outcome as CliResolution).route.pattern, equals('build'));
     });

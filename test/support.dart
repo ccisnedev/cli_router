@@ -1,6 +1,7 @@
 // Shared fixtures for cli_router 0.2.0 tests. Not a `_test.dart` file, so
 // `dart test` does not try to run it as its own suite.
 import 'package:cli_router/cli_router.dart';
+import 'package:test/test.dart';
 
 final jsonOpt = OptionSpec.flag('json', abbr: null, repeatable: false);
 final quietOpt = OptionSpec.flag('quiet', abbr: 'q', repeatable: false);
@@ -136,3 +137,75 @@ CliRouter buildPermuteDemoRouter() {
   );
   return router;
 }
+
+/// Resolves [args] under `OptionOrdering.strict`, exactly as
+/// `router.resolve(args, ordering: OptionOrdering.strict)` used to, and
+/// returns that same outcome unchanged.
+///
+/// Additionally, whenever that strict resolution succeeds, this also
+/// resolves [args] under the default `OptionOrdering.permute` and asserts
+/// the two outcomes agree: same route, same params, same rest, and the same
+/// options read (by name, abbreviation, value and how the value was
+/// written), independent of where in argv each option ended up after
+/// permutation. This makes every pinned strict-mode success in the suite
+/// double as a differential check: whatever strict mode accepts, permute
+/// mode must accept too, with an identical result (issue #8, review fix 4).
+///
+/// A strict-mode rejection is returned as-is, with no permute-mode check:
+/// permute mode is free to accept an argv that strict mode rejects (that is
+/// the entire point of permutation), so there is nothing to compare there.
+CliOutcome resolveStrict(CliRouter router, List<String> args) {
+  final strict = router.resolve(args, ordering: OptionOrdering.strict);
+  if (strict is! CliResolution) return strict;
+
+  final permuted = router.resolve(args);
+  expect(
+    permuted,
+    isA<CliResolution>(),
+    reason:
+        'permute mode must accept whatever strict mode accepts, for $args, '
+        'got $permuted',
+  );
+  final resolution = permuted as CliResolution;
+  expect(
+    resolution.route.pattern,
+    equals(strict.route.pattern),
+    reason: 'route pattern diverged between strict and permute for $args',
+  );
+  expect(
+    resolution.route.hasWildcard,
+    equals(strict.route.hasWildcard),
+    reason: 'route shape diverged between strict and permute for $args',
+  );
+  expect(
+    resolution.params,
+    equals(strict.params),
+    reason: 'params diverged between strict and permute for $args',
+  );
+  expect(
+    resolution.rest,
+    equals(strict.rest),
+    reason: 'rest diverged between strict and permute for $args',
+  );
+  expect(
+    _optionSignatures(resolution.options),
+    equals(_optionSignatures(strict.options)),
+    reason: 'options diverged between strict and permute for $args',
+  );
+  return strict;
+}
+
+/// A structural projection of [options], for comparing across strict and
+/// permute mode. [ParsedOption.argvIndex] is deliberately left out:
+/// permutation moves tokens around by design, so the same option can sit at
+/// a different argv index in each mode while still being the same read.
+List<({String name, String? abbr, String? value, bool attached})>
+_optionSignatures(List<ParsedOption> options) => [
+  for (final o in options)
+    (
+      name: o.spec.name,
+      abbr: o.spec.abbr,
+      value: o.value,
+      attached: o.attached,
+    ),
+];

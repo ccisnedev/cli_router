@@ -6,7 +6,7 @@ import 'package:test/test.dart';
 import 'support.dart';
 
 CliRejection _rejected(CliRouter router, List<String> args) {
-  final outcome = router.resolve(args, ordering: OptionOrdering.strict);
+  final outcome = resolveStrict(router, args);
   expect(outcome, isA<CliRejection>(), reason: 'for $args, got $outcome');
   return outcome as CliRejection;
 }
@@ -31,7 +31,7 @@ void main() {
       test('a router with a root parameter never reaches unknownCommand', () {
         // The shortcut absorbs any word, per G3.
         final router = buildCalculatrixRouter();
-        final outcome = router.resolve(['totally-unknown-word'], ordering: OptionOrdering.strict);
+        final outcome = resolveStrict(router, ['totally-unknown-word']);
         expect(outcome, isA<CliResolution>());
         expect(
           (outcome as CliResolution).params['program'],

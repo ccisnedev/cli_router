@@ -49,7 +49,7 @@ void main() {
       sub.cmd('list', (req) async => 0, options: const [], globals: false);
       router.mount('things', sub);
 
-      final outcome = router.resolve(['things', 'list'], ordering: OptionOrdering.strict);
+      final outcome = resolveStrict(router, ['things', 'list']);
       expect(outcome, isA<CliResolution>());
       expect((outcome as CliResolution).route.pattern, equals('things list'));
     });
@@ -69,7 +69,7 @@ void main() {
       final router = CliRouter(globalOptions: const []);
       router.mount('a', middle);
 
-      final outcome = router.resolve(['a', 'b', 'show'], ordering: OptionOrdering.strict);
+      final outcome = resolveStrict(router, ['a', 'b', 'show']);
       expect(outcome, isA<CliResolution>());
       expect((outcome as CliResolution).route.pattern, equals('a b show'));
     });
@@ -117,7 +117,7 @@ void main() {
       final sub = CliRouter(globalOptions: const []);
       router.mount('things', sub);
       expect(router.reservedWords, contains('things'));
-      final outcome = router.resolve(['things'], ordering: OptionOrdering.strict);
+      final outcome = resolveStrict(router, ['things']);
       expect(outcome, isA<CliRejection>());
     });
   });

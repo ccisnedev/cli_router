@@ -28,16 +28,20 @@ void main() {
       expect(result.options.single.spec.name, equals('verbose'));
     });
 
-    test('the same invocation is misplacedOption under OptionOrdering.strict', () {
-      final router = buildPermuteDemoRouter();
-      final rejection = _rejected(
-        router.resolve(
-          ['build', 'app', '--verbose'],
-          ordering: OptionOrdering.strict,
-        ),
-      );
-      expect(rejection.kind, equals(CliRejectionKind.misplacedOption));
-    });
+    test(
+      'the same invocation is misplacedOption under OptionOrdering.strict',
+      () {
+        final router = buildPermuteDemoRouter();
+        final rejection = _rejected(
+          router.resolve([
+            'build',
+            'app',
+            '--verbose',
+          ], ordering: OptionOrdering.strict),
+        );
+        expect(rejection.kind, equals(CliRejectionKind.misplacedOption));
+      },
+    );
   });
 
   group('rule: relative order is preserved within each group', () {
@@ -100,32 +104,69 @@ void main() {
       expect(result.options, isEmpty);
     });
 
-    test('run a --verbose -- --literal : only the part before -- is '
-        'eligible, and it is already frozen by the wildcard rule below, so '
-        'this still rejects, identically to strict mode', () {
+    test('run a --verbose -- --literal : the wildcard\'s first captured '
+        'token already starts the frozen region below, so this later, '
+        'explicit -- is just more data inside it, not a second boundary', () {
       final router = buildPermuteDemoRouter();
-      final rejection = _rejected(
+      final result = _ok(
         router.resolve(['run', 'a', '--verbose', '--', '--literal']),
       );
-      expect(rejection.kind, equals(CliRejectionKind.misplacedOption));
+      expect(result.rest, equals(['a', '--verbose', '--', '--literal']));
+      expect(result.options, isEmpty);
     });
+
+    test(
+      'the same invocation is misplacedOption under OptionOrdering.strict',
+      () {
+        final router = buildPermuteDemoRouter();
+        final rejection = _rejected(
+          router.resolve([
+            'run',
+            'a',
+            '--verbose',
+            '--',
+            '--literal',
+          ], ordering: OptionOrdering.strict),
+        );
+        expect(rejection.kind, equals(CliRejectionKind.misplacedOption));
+      },
+    );
   });
 
   group('rule: inside a * wildcard route, nothing from the first captured '
-      'token on is ever permuted', () {
-    test('run a -v : an option after the wildcard-captured operand stays '
-        'misplaced, exactly as in strict mode (it is not rescued)', () {
+      'token on is ever an option again', () {
+    test('run a -v : the docker run IMAGE CMD -flags case; once the first '
+        'wildcard token appears, it and everything after it are operands, '
+        'even when they look like an option', () {
       final router = buildPermuteDemoRouter();
-      final rejection = _rejected(router.resolve(['run', 'a', '-v']));
+      final result = _ok(router.resolve(['run', 'a', '-v']));
+      expect(result.route.pattern, equals('run'));
+      expect(result.route.hasWildcard, isTrue);
+      expect(result.rest, equals(['a', '-v']));
+      expect(result.options, isEmpty);
+    });
+
+    test('the same invocation is misplacedOption under OptionOrdering.strict, '
+        'confirming permute changed the outcome, not just the argv', () {
+      final router = buildPermuteDemoRouter();
+      final rejection = _rejected(
+        router.resolve(['run', 'a', '-v'], ordering: OptionOrdering.strict),
+      );
       expect(rejection.kind, equals(CliRejectionKind.misplacedOption));
+    });
+
+    test('run -v a : an option written before the wildcard\'s first token '
+        'is unaffected and still applies', () {
+      final router = buildPermuteDemoRouter();
+      final result = _ok(router.resolve(['run', '-v', 'a']));
+      expect(result.rest, equals(['a']));
+      expect(result.options.single.spec.name, equals('verbose'));
     });
 
     test('sync push --force a b : an option between the required parameter '
         'and the wildcard\'s first token is still permuted', () {
       final router = buildPermuteDemoRouter();
-      final result = _ok(
-        router.resolve(['sync', 'push', '--force', 'a', 'b']),
-      );
+      final result = _ok(router.resolve(['sync', 'push', '--force', 'a', 'b']));
       expect(result.route.pattern, equals('sync <mode>'));
       expect(result.route.hasWildcard, isTrue);
       expect(result.params['mode'], equals('push'));
@@ -137,22 +178,135 @@ void main() {
         'confirming permute changed the outcome, not just the argv', () {
       final router = buildPermuteDemoRouter();
       final rejection = _rejected(
-        router.resolve(
-          ['sync', 'push', '--force', 'a', 'b'],
-          ordering: OptionOrdering.strict,
-        ),
+        router.resolve([
+          'sync',
+          'push',
+          '--force',
+          'a',
+          'b',
+        ], ordering: OptionOrdering.strict),
       );
       expect(rejection.kind, equals(CliRejectionKind.misplacedOption));
     });
 
     test('sync push a --force b : once the wildcard has already captured '
-        'its first token, a later option stays misplaced in permute mode '
-        'too', () {
+        'its first token, a later option is data too, not misplaced', () {
+      final router = buildPermuteDemoRouter();
+      final result = _ok(router.resolve(['sync', 'push', 'a', '--force', 'b']));
+      expect(result.params['mode'], equals('push'));
+      expect(result.rest, equals(['a', '--force', 'b']));
+      expect(result.options, isEmpty);
+    });
+
+    test(
+      'the same invocation is misplacedOption under OptionOrdering.strict',
+      () {
+        final router = buildPermuteDemoRouter();
+        final rejection = _rejected(
+          router.resolve([
+            'sync',
+            'push',
+            'a',
+            '--force',
+            'b',
+          ], ordering: OptionOrdering.strict),
+        );
+        expect(rejection.kind, equals(CliRejectionKind.misplacedOption));
+      },
+    );
+  });
+
+  group("rule 4: '--' ends option parsing anywhere, not only before the "
+      'first operand', () {
+    test('copy a -- b : an operand before -- and an operand after it are '
+        'both bound, in their original relative order', () {
+      final router = buildPermuteDemoRouter();
+      final result = _ok(router.resolve(['copy', 'a', '--', 'b']));
+      expect(result.params['src'], equals('a'));
+      expect(result.params['dst'], equals('b'));
+    });
+
+    test('the same invocation is misplacedOption under OptionOrdering.strict, '
+        'confirming permute changed the outcome, not just the argv', () {
       final router = buildPermuteDemoRouter();
       final rejection = _rejected(
-        router.resolve(['sync', 'push', 'a', '--force', 'b']),
+        router.resolve([
+          'copy',
+          'a',
+          '--',
+          'b',
+        ], ordering: OptionOrdering.strict),
       );
       expect(rejection.kind, equals(CliRejectionKind.misplacedOption));
+    });
+
+    test('copy --force a -- b : an option written before the first operand '
+        'is hoisted exactly as usual, and the split operand is still '
+        'rescued', () {
+      final router = buildPermuteDemoRouter();
+      final result = _ok(router.resolve(['copy', '--force', 'a', '--', 'b']));
+      expect(result.params['src'], equals('a'));
+      expect(result.params['dst'], equals('b'));
+      expect(result.options.single.spec.name, equals('force'));
+    });
+
+    test('copy a --force -- b : an option written after the first operand '
+        'but before -- is hoisted too, and the split operand is still '
+        'rescued', () {
+      final router = buildPermuteDemoRouter();
+      final result = _ok(router.resolve(['copy', 'a', '--force', '--', 'b']));
+      expect(result.params['src'], equals('a'));
+      expect(result.params['dst'], equals('b'));
+      expect(result.options.single.spec.name, equals('force'));
+    });
+
+    test('copy a -- -b : everything after -- is data, never reclassified '
+        'as an option, however it looks', () {
+      final router = buildPermuteDemoRouter();
+      final result = _ok(router.resolve(['copy', 'a', '--', '-b']));
+      expect(result.params['src'], equals('a'));
+      expect(result.params['dst'], equals('-b'));
+      expect(result.options, isEmpty);
+    });
+  });
+
+  group('rule 4 does not silently drop a dangling --', () {
+    test('copy a b -- : nothing follows the marker, so it is left exactly '
+        'where it was and the unchanged strict grammar rejects it', () {
+      final router = buildPermuteDemoRouter();
+      final rejection = _rejected(router.resolve(['copy', 'a', 'b', '--']));
+      expect(rejection.kind, equals(CliRejectionKind.misplacedOption));
+    });
+  });
+
+  group('a value option hoisted without a value of its own must never '
+      'absorb an unrelated, relocated operand as its value (regression)', () {
+    test('eval rpn demo --file : a trailing value option with nothing '
+        'after it must not swallow the operand that preceded it once both '
+        'are moved next to each other', () {
+      final router = buildCalculatrixRouter();
+      final rejection = _rejected(
+        router.resolve(['eval', 'rpn', 'demo', '--file']),
+      );
+      expect(rejection.kind, equals(CliRejectionKind.missingValue));
+    });
+
+    test('eval rpn demo -f : the same bug, through the short spelling', () {
+      final router = buildCalculatrixRouter();
+      final rejection = _rejected(
+        router.resolve(['eval', 'rpn', 'demo', '-f']),
+      );
+      expect(rejection.kind, equals(CliRejectionKind.missingValue));
+    });
+
+    test('eval rpn demo --file -- : a value option immediately followed '
+        'only by -- has no value either, ; is never allowed to reach '
+        'across -- for one', () {
+      final router = buildCalculatrixRouter();
+      final rejection = _rejected(
+        router.resolve(['eval', 'rpn', 'demo', '--file', '--']),
+      );
+      expect(rejection.kind, equals(CliRejectionKind.missingValue));
     });
   });
 
@@ -180,16 +334,21 @@ void main() {
       expect(result.options.single.spec.name, equals('json'));
     });
 
-    test('the same invocation is misplacedOption under OptionOrdering.strict', () {
-      final router = buildCalculatrixRouter();
-      final rejection = _rejected(
-        router.resolve(
-          ['eval', 'rpn', '-1', '--json'],
-          ordering: OptionOrdering.strict,
-        ),
-      );
-      expect(rejection.kind, equals(CliRejectionKind.misplacedOption));
-    });
+    test(
+      'the same invocation is misplacedOption under OptionOrdering.strict',
+      () {
+        final router = buildCalculatrixRouter();
+        final rejection = _rejected(
+          router.resolve([
+            'eval',
+            'rpn',
+            '-1',
+            '--json',
+          ], ordering: OptionOrdering.strict),
+        );
+        expect(rejection.kind, equals(CliRejectionKind.misplacedOption));
+      },
+    );
   });
 
   group('run() picks OptionOrdering from POSIXLY_CORRECT', () {
@@ -233,10 +392,11 @@ void main() {
         'real process environment (exercised only for coverage: this '
         'process is not expected to have POSIXLY_CORRECT set)', () async {
       final router = buildPermuteDemoRouter();
-      final code = await router.run(
-        ['build', 'app', '--verbose'],
-        onReject: (r) async => 64,
-      );
+      final code = await router.run([
+        'build',
+        'app',
+        '--verbose',
+      ], onReject: (r) async => 64);
       expect(code, equals(0));
     });
   });

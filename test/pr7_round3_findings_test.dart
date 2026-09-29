@@ -4,8 +4,10 @@
 import 'package:cli_router/cli_router.dart';
 import 'package:test/test.dart';
 
+import 'support.dart';
+
 CliRejection _rejected(CliRouter router, List<String> args) {
-  final outcome = router.resolve(args, ordering: OptionOrdering.strict);
+  final outcome = resolveStrict(router, args);
   expect(outcome, isA<CliRejection>(), reason: 'for $args, got $outcome');
   return outcome as CliRejection;
 }
