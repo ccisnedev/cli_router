@@ -11,7 +11,7 @@ void main() {
   group('regression: a value option with no value, at the end', () {
     test('cx eval rpn -f used to bind path="true"; now missingValue', () {
       final router = buildCalculatrixRouter();
-      final outcome = router.resolve(['eval', 'rpn', '-f']);
+      final outcome = router.resolve(['eval', 'rpn', '-f'], ordering: OptionOrdering.strict);
       expect(outcome, isA<CliRejection>());
       expect(
         (outcome as CliRejection).kind,
@@ -25,7 +25,7 @@ void main() {
       'cx eval rpn --no-file x used to set file=false; now unknownOption',
       () {
         final router = buildCalculatrixRouter();
-        final outcome = router.resolve(['eval', 'rpn', '--no-file', 'x']);
+        final outcome = router.resolve(['eval', 'rpn', '--no-file', 'x'], ordering: OptionOrdering.strict);
         expect(outcome, isA<CliRejection>());
         expect(
           (outcome as CliRejection).kind,
@@ -47,7 +47,7 @@ void main() {
         'a.rpn',
         '-f',
         'b.rpn',
-      ]);
+      ], ordering: OptionOrdering.strict);
       expect(outcome, isA<CliRejection>());
       expect(
         (outcome as CliRejection).kind,
@@ -60,7 +60,7 @@ void main() {
     test('cx --json=garbage version used to be accepted (exit 0); now '
         'unexpectedValue', () {
       final router = buildCalculatrixRouter();
-      final outcome = router.resolve(['--json=garbage', 'version']);
+      final outcome = router.resolve(['--json=garbage', 'version'], ordering: OptionOrdering.strict);
       expect(outcome, isA<CliRejection>());
       expect(
         (outcome as CliRejection).kind,
@@ -72,7 +72,7 @@ void main() {
   group('regression: a leftover operand is never silently ignored', () {
     test('cx version junk used to be ignored; now extraArgument', () {
       final router = buildCalculatrixRouter();
-      final outcome = router.resolve(['version', 'junk']);
+      final outcome = router.resolve(['version', 'junk'], ordering: OptionOrdering.strict);
       expect(outcome, isA<CliRejection>());
       expect(
         (outcome as CliRejection).kind,
@@ -85,7 +85,7 @@ void main() {
     test('cx eval rpn -qh used to set {q:true,h:true}; now '
         'invalidShortOption', () {
       final router = buildCalculatrixRouter();
-      final outcome = router.resolve(['eval', 'rpn', '-qh']);
+      final outcome = router.resolve(['eval', 'rpn', '-qh'], ordering: OptionOrdering.strict);
       expect(outcome, isA<CliRejection>());
       expect(
         (outcome as CliRejection).kind,
@@ -98,7 +98,7 @@ void main() {
     test('cx eval rpn -f=prog.rpn used to bind f="prog.rpn"; now '
         'invalidShortOption', () {
       final router = buildCalculatrixRouter();
-      final outcome = router.resolve(['eval', 'rpn', '-f=prog.rpn']);
+      final outcome = router.resolve(['eval', 'rpn', '-f=prog.rpn'], ordering: OptionOrdering.strict);
       expect(outcome, isA<CliRejection>());
       expect(
         (outcome as CliRejection).kind,
@@ -110,21 +110,21 @@ void main() {
   group('G11: negative numbers are operands, never options', () {
     test('cx -1 : the shortcut binds program="-1"', () {
       final router = buildCalculatrixRouter();
-      final outcome = router.resolve(['-1']);
+      final outcome = router.resolve(['-1'], ordering: OptionOrdering.strict);
       expect(outcome, isA<CliResolution>());
       expect((outcome as CliResolution).params['program'], equals('-1'));
     });
 
     test("cx '-1 2 +' : the shortcut binds the whole expression", () {
       final router = buildCalculatrixRouter();
-      final outcome = router.resolve(['-1 2 +']);
+      final outcome = router.resolve(['-1 2 +'], ordering: OptionOrdering.strict);
       expect(outcome, isA<CliResolution>());
       expect((outcome as CliResolution).params['program'], equals('-1 2 +'));
     });
 
     test('cx -2.5 : a negative float is an operand', () {
       final router = buildCalculatrixRouter();
-      final outcome = router.resolve(['-2.5']);
+      final outcome = router.resolve(['-2.5'], ordering: OptionOrdering.strict);
       expect(outcome, isA<CliResolution>());
       expect((outcome as CliResolution).params['program'], equals('-2.5'));
     });
@@ -132,7 +132,7 @@ void main() {
     test('cx --3 : not shaped like an option (no letter after --), an '
         'operand', () {
       final router = buildCalculatrixRouter();
-      final outcome = router.resolve(['--3']);
+      final outcome = router.resolve(['--3'], ordering: OptionOrdering.strict);
       expect(outcome, isA<CliResolution>());
       expect((outcome as CliResolution).params['program'], equals('--3'));
     });
@@ -140,7 +140,7 @@ void main() {
     test('cx eval rpn -1 : a negative number after a route is still an '
         'operand, bound as the program', () {
       final router = buildCalculatrixRouter();
-      final outcome = router.resolve(['eval', 'rpn', '-1']);
+      final outcome = router.resolve(['eval', 'rpn', '-1'], ordering: OptionOrdering.strict);
       expect(outcome, isA<CliResolution>());
       expect((outcome as CliResolution).params['program'], equals('-1'));
     });

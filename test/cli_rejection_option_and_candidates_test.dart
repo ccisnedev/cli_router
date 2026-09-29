@@ -19,7 +19,7 @@ import 'package:test/test.dart';
 import 'support.dart';
 
 CliRejection _rejected(CliRouter router, List<String> args) {
-  final outcome = router.resolve(args);
+  final outcome = router.resolve(args, ordering: OptionOrdering.strict);
   expect(outcome, isA<CliRejection>(), reason: 'for $args, got $outcome');
   return outcome as CliRejection;
 }

@@ -7,7 +7,7 @@ import 'package:cli_router/cli_router.dart';
 import 'package:test/test.dart';
 
 CliRejection _rejected(CliRouter router, List<String> args) {
-  final outcome = router.resolve(args);
+  final outcome = router.resolve(args, ordering: OptionOrdering.strict);
   expect(outcome, isA<CliRejection>(), reason: 'for $args, got $outcome');
   return outcome as CliRejection;
 }
@@ -97,7 +97,7 @@ void main() {
         globals: false,
       );
 
-      final outcome = router.resolve(['x']);
+      final outcome = router.resolve(['x'], ordering: OptionOrdering.strict);
 
       expect(outcome, isA<CliResolution>());
       final resolution = outcome as CliResolution;

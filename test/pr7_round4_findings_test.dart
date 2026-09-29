@@ -5,7 +5,7 @@ import 'package:cli_router/cli_router.dart';
 import 'package:test/test.dart';
 
 CliRejection _rejected(CliRouter router, List<String> args) {
-  final outcome = router.resolve(args);
+  final outcome = router.resolve(args, ordering: OptionOrdering.strict);
   expect(outcome, isA<CliRejection>(), reason: 'for $args, got $outcome');
   return outcome as CliRejection;
 }
@@ -64,7 +64,7 @@ void main() {
       );
       router.cmd('run *', (req) async => 0, options: const [], globals: false);
 
-      final outcome = router.resolve(['run', 'x']);
+      final outcome = router.resolve(['run', 'x'], ordering: OptionOrdering.strict);
 
       expect(outcome, isA<CliResolution>());
       final resolution = outcome as CliResolution;
@@ -103,7 +103,7 @@ void main() {
       );
       router.cmd('run *', (req) async => 0, options: const [], globals: false);
 
-      final outcome = router.resolve(['run']);
+      final outcome = router.resolve(['run'], ordering: OptionOrdering.strict);
 
       expect(outcome, isA<CliResolution>());
       final resolution = outcome as CliResolution;
@@ -123,7 +123,7 @@ void main() {
       );
       router.cmd('run *', (req) async => 0, options: const [], globals: false);
 
-      final outcome = router.resolve(['run', 'x', 'y']);
+      final outcome = router.resolve(['run', 'x', 'y'], ordering: OptionOrdering.strict);
 
       expect(outcome, isA<CliResolution>());
       final resolution = outcome as CliResolution;

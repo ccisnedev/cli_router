@@ -89,3 +89,50 @@ CliRouter buildCalculatrixRouter() {
 
   return router;
 }
+
+final permuteVerboseOpt = OptionSpec.flag(
+  'verbose',
+  abbr: 'v',
+  repeatable: false,
+);
+final permuteForceOpt = OptionSpec.flag('force', abbr: null, repeatable: false);
+final permuteTagOpt = OptionSpec.value(
+  'tag',
+  abbr: 't',
+  required: false,
+  repeatable: false,
+);
+
+/// A small router with a trailing `*` wildcard and multi parameter routes,
+/// used by the `OptionOrdering.permute` tests (issue #8) to exercise
+/// permutation next to required parameters and a wildcard, which
+/// [buildCalculatrixRouter] does not have. No globals: each route declares
+/// only the options it needs.
+CliRouter buildPermuteDemoRouter() {
+  final router = CliRouter(globalOptions: const []);
+  router.cmd(
+    'run *',
+    (req) async => 0,
+    options: [permuteVerboseOpt],
+    globals: false,
+  );
+  router.cmd(
+    'sync <mode> *',
+    (req) async => 0,
+    options: [permuteForceOpt],
+    globals: false,
+  );
+  router.cmd(
+    'copy <src> <dst>',
+    (req) async => 0,
+    options: [permuteForceOpt],
+    globals: false,
+  );
+  router.cmd(
+    'build <target>',
+    (req) async => 0,
+    options: [permuteVerboseOpt, permuteTagOpt],
+    globals: false,
+  );
+  return router;
+}
